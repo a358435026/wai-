@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "TongchuanCore",
-    platforms: [.macOS(.v13), .iOS(.v17)],
+    platforms: [.macOS(.v13), .iOS(.v15)],
     products: [.library(name: "TongchuanCore", targets: ["TongchuanCore"])],
     targets: [
         .target(name: "TongchuanCore", path: "Sources/Core"),

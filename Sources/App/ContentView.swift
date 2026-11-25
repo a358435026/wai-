@@ -6,7 +6,7 @@ private let teal = Color(red: 0.08, green: 0.39, blue: 0.34)
 struct ContentView: View {
     @StateObject private var model = InterpreterModel()
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 VStack(spacing: 22) {
                     header
@@ -56,13 +56,13 @@ struct ContentView: View {
             .background(Color(red: 0.96, green: 0.97, blue: 0.95))
             .navigationTitle("随声同传").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button { model.showSettings = true } label: { Image(systemName: "slider.horizontal.3") }
                         .accessibilityLabel("设置").disabled(model.active)
                 }
             }
             .sheet(isPresented: $model.showSettings) { SettingsView(model: model) }
-        }.tint(teal)
+        }.navigationViewStyle(.stack).tint(teal)
     }
     private var buttonTitle: String {
         switch model.phase {
@@ -94,7 +94,6 @@ struct ContentView: View {
                 .font(.system(size: 25)).foregroundStyle(teal)
                 .frame(width: 62, height: 62)
                 .background(teal.opacity(model.active ? 0.18 : 0.08), in: Circle())
-                .symbolEffect(.variableColor, isActive: model.phase == .live)
             VStack(alignment: .leading, spacing: 6) {
                 Text(model.playing ? "正在播放译音" : model.status).font(.headline)
                 Text(model.active ? model.route : "戴上耳机，或直接使用扬声器")
@@ -138,7 +137,7 @@ private struct SettingsView: View {
     @State private var key = ""
     @State private var error: String?
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section {
                     Label(model.keySaved ? "已保存 API Key" : "尚未配置 API Key",
@@ -174,7 +173,7 @@ private struct SettingsView: View {
                 if let error { Section { Text(error).foregroundStyle(.red) } }
             }
             .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
-        }.tint(teal)
+            .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } } }
+        }.navigationViewStyle(.stack).tint(teal)
     }
 }

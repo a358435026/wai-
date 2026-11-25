@@ -88,7 +88,11 @@ final class InterpreterModel: ObservableObject {
         connectionTask = Task { [weak self] in
             guard let self else { return }
             let allowed = await withCheckedContinuation { continuation in
-                AVAudioApplication.requestRecordPermission { continuation.resume(returning: $0) }
+                if #available(iOS 17.0, *) {
+                    AVAudioApplication.requestRecordPermission { continuation.resume(returning: $0) }
+                } else {
+                    AVAudioSession.sharedInstance().requestRecordPermission { continuation.resume(returning: $0) }
+                }
             }
             guard self.generation == run && !Task.isCancelled else { return }
             guard allowed else { self.fail("麦克风权限未开启。请在 iPhone 设置中允许随声同传使用麦克风。"); return }
