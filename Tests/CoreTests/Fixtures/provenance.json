@@ -1,0 +1,5 @@
+{
+  "generator": "official AST Python protobuf generated bindings",
+  "source": "https://docs.volcengine.com/docs/doubao-voice/simultaneous-interpretation?lang=zh",
+  "session": "synthetic interop-session; no credentials or real recordings"
+}

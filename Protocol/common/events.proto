@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+package data.speech.event;
+
+enum Type {
+  option allow_alias = true;
+  /*
+   * All following event names do not conform to CONSTANT_CASE naming style
+   * because we intentionally make them consistant with the existing SAMI
+   * string-typed events so that these enum values can be easily converted to
+   * event strings by simply call their `String()` method (eg,
+   * `event.Type_StartTTS.String() == "StartTTS"`).
+   */
+
+  // Ĭ���¼��������ڲ�ʹ���¼��ķ�������Ҫ�����¼��������
+  // ���߶���ʹ���¼��ķ���������ͨ����0ֵ��У���¼��ĺϷ���
+  None = 0;
+
+  /*
+   * 1 ~ 300 Ϊ��ҵ���޹ص�ͨ���¼�
+   */
+
+  /*** 1 �� 99 ΪConnection����¼� ***/
+
+  // 1 ~ 49 Ϊ����Connection�¼�
+  StartConnection = 1;
+  StartTask = 1; // Alias of "StartConnection"
+  FinishConnection = 2;
+  FinishTask = 2; // Alias of "FinishConnection"
+
+  // 50 ~ 99 Ϊ����Connection�¼�
+  // �ɹ�����
+  ConnectionStarted = 50;
+  TaskStarted = 50; // Alias of "ConnectionStarted"
+  // ����ʧ�ܣ��������޷�ͨ��Ȩ����֤��
+  ConnectionFailed = 51;
+  TaskFailed = 51; // Alias of "ConnectionFailed"
+  // ���ӽ���
+  ConnectionFinished = 52;
+  TaskFinished = 52; // Alias of "ConnectionFinished"
+
+  /*** 100 ~ 199 ΪSession�������������¼� ***/
+
+  // 100 ~ 149 Ϊ����Session�¼�
+  StartSession = 100;
+  CancelSession = 101;
+  FinishSession = 102;
+
+  // 150 �� 199 Ϊ����Session�¼�
+  SessionStarted = 150;
+  SessionCanceled = 151;
+  SessionFinished = 152;
+  SessionFailed = 153;
+
+  // �����¼�
+  UsageResponse = 154;
+  ChargeData = 154; // Alias of "UsageResponse"
+
+  /*** 200 �� 299 Ϊ�����ض������󶨵�ͨ���¼����ᱻ����������������� ***/
+
+  // 200 ~ 249 Ϊ����ͨ���¼�
+  TaskRequest = 200;
+  UpdateConfig = 201;
+
+  ImageRequest = 202;
+
+  // 250 ~ 299 Ϊ����ͨ���¼�
+  AudioMuted = 250;
+
+  /*
+   * 300������Ϊҵ����ص��¼�
+   */
+
+  /*** 300 ~ 399 ΪTTS����¼� ***/
+
+  // 300 ~ 349 Ϊ����TTS�¼�
+  SayHello = 300;
+
+  // 350 ~ 399 Ϊ����TTS�¼�
+  TTSSentenceStart = 350;
+  TTSSentenceEnd = 351;
+  TTSResponse = 352;
+  TTSEnded = 359;
+  PodcastRoundStart = 360;
+  PodcastRoundResponse = 361;
+  PodcastRoundEnd = 362;
+
+  /*** 400 ~ 499 ΪASR����¼� ***/
+
+  // 400 ~ 449 Ϊ����ASR�¼�
+
+  // 450 ~ 499 Ϊ����ASR�¼�
+  ASRInfo = 450;
+  ASRResponse = 451;
+  ASREnded = 459;
+
+  /*** 500 ~ 599 Ϊ�Ի�����¼� ***/
+
+  // 500 ~ 549 Ϊ���жԻ��¼�
+  // (Ground-Truth-Alignment) text for speech synthesis
+  ChatTTSText = 500;
+  ChatTextQuery = 501;
+
+  // 550 ~ 599 Ϊ���жԻ��¼�
+  ChatResponse = 550;
+  ChimeInStart = 551;
+  ChimeInEnd = 552;
+  ChatEnded = 559;
+  ThinkStart = 560;
+  ThinkResponse = 561;
+  ThinkEnd = 562;
+  ToolOutput = 563;
+  FCResponseStart = 564;
+  FCResponse = 565;
+  FCResponseEnd = 566;
+
+  /*** 600 ~ 699 ΪMachine Translation����¼� ***/
+
+  // 600 ~ 649 Ϊ���жԻ��¼�
+
+  // 650 ~ 699 Ϊ���жԻ��¼�
+  // Events for source (original) language subtitle.
+  SourceSubtitleStart = 650;
+  SourceSubtitleResponse = 651;
+  SourceSubtitleEnd = 652;
+  // Events for target (translation) language subtitle.
+  TranslationSubtitleStart = 653;
+  TranslationSubtitleResponse = 654;
+  TranslationSubtitleEnd = 655;
+}

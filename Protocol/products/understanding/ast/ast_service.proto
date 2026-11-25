@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+import "common/events.proto";
+import "common/rpcmeta.proto";
+import "products/understanding/base/au_base.proto";
+
+package data.speech.ast;
+
+message ReqParams {
+  string mode = 1;            // ������s2t , s2s ѡһ��, �����Ƿ���Ҫ����
+  string source_language = 2; // Դ����
+  string target_language = 3; // Ŀ������
+  string speaker_id = 4;
+  int32 speech_rate = 5;
+  optional bool enable_source_language_detect = 6;
+  bool is_custom_speaker = 7;
+  string tts_resource_id = 8;
+
+  string extra = 80;
+  understanding.Corpus corpus = 100;
+}
+
+message TranslateRequest {
+  optional common.RequestMeta request_meta = 1;
+  event.Type event = 2;
+  understanding.User user = 3;
+  // bytes data = 2;               // request binary data
+  understanding.Audio source_audio = 4; // Դ��Ƶ��Ϣ
+  // Ŀ����Ƶ��Ϣ��ֻ��Ҫ��format��pcm/ogg����rate��bits��channel��Щ
+  understanding.Audio target_audio = 5;
+  ReqParams request = 6;     // �������
+  optional bool denoise = 7; // �Ƿ�������
+}
+
+message TranslateResponse {
+  optional common.ResponseMeta response_meta = 1;
+  event.Type event = 2;
+  bytes data = 3;  // response binary data
+  string text = 4; // ԭ�Ļ�������
+  int32 start_time = 5;
+  int32 end_time = 6;
+  bool spk_chg = 7;
+  int32 muted_duration_ms = 8;
+  string speaker_id = 9;
+  // �� SourceSubtitleEnd(652) �ȳ��������ּ��д��
+  optional string detected_language = 10;
+  optional double language_confidence = 11;
+}
+
+service ASTService {
+  rpc Translate(stream TranslateRequest) returns (stream TranslateResponse);
+}
