@@ -39,6 +39,8 @@ GitHub Actions `.github/workflows/ios.yml` 在 macOS 上执行核心测试、真
 也可在 Xcode 选择自己的 Apple Team 和真机进行签名运行。TestFlight 需要开发者账号和发布配置。
 未将证书、Apple ID 或 API Key 放入 Actions。
 
+安装步骤见 [INSTALL.md](INSTALL.md)，实际构建结果见 [VALIDATION.md](VALIDATION.md)。
+
 ## 真机验收清单（构建成功不能替代）
 
 1. 输入有效 Key，开通麦克风：说中文，显示英文并听到英文译音；反向同样测试。
