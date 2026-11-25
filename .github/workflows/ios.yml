@@ -37,22 +37,35 @@ jobs:
         run: |
           python3 tools/verify_ipa.py build/Tongchuan-iOS15-unsigned.ipa \
             --max-minimum-ios 15.4.1 --expected-version 0.1.1 | tee build/ipa-verification.json
+      - name: Upload verified iPhone IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tongchuan-iOS15-IPA
+          path: |
+            build/Tongchuan-iOS15-unsigned.ipa
+            build/ipa-verification.json
+          retention-days: 7
       - name: Select available iPhone simulator
+        timeout-minutes: 3
         run: |
-          DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for group in d["devices"].values() for x in group if x["isAvailable"] and x["name"].startswith("iPhone")))')
-          echo "SIMULATOR_ID=$DEVICE" >> "$GITHUB_ENV"
+          xcrun simctl list devices available -j > build/simulators.json
+          SDK_VERSION=$(xcrun --sdk iphonesimulator --show-sdk-version)
+          python3 tools/select_simulator.py build/simulators.json "$SDK_VERSION" >> "$GITHUB_ENV"
+      - name: Boot selected simulator
+        timeout-minutes: 3
+        run: xcrun simctl bootstatus "$SIMULATOR_ID" -b
       - name: Simulator launch and settings test
+        timeout-minutes: 5
         run: |
           xcodebuild test -project Tongchuan.xcodeproj -scheme Tongchuan \
             -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -parallel-testing-enabled NO \
             -resultBundlePath build/UITests.xcresult CODE_SIGNING_ALLOWED=NO
       - name: Upload unsigned app and verification results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Tongchuan-iOS
+          name: Tongchuan-iOS15-tests
           path: |
-            build/Tongchuan-iOS15-unsigned.ipa
-            build/ipa-verification.json
             build/UITests.xcresult
           retention-days: 7
