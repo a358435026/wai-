@@ -129,8 +129,8 @@ message AsrNotification {
 }
 
 message ReqParams {
-  string model_name = 1;  // ����ӳ�伯Ⱥ
-  string config_name = 2; // ����ӳ��tcc����
+  string model_name = 1;  // 用于映射集群
+  string config_name = 2; // 用于映射tcc配置
   optional bool enable_vad = 3;
   optional bool enable_punc = 4;
   optional bool enable_itn = 5;
@@ -177,7 +177,7 @@ message ReqParams {
 }
 
 message Corpus {
-  // json��ʽ�������ȴʣ���ʣ�ƪ�£������ʱ���
+  // json格式，包含热词，冷词，篇章，纠错词表等
   string context = 1;
   string boosting_table_id = 2;
   string boosting_table_name = 3;

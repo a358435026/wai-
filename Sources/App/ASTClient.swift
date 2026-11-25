@@ -90,8 +90,8 @@ final class ASTClient {
         case disconnected, unexpectedText
         var errorDescription: String? {
             switch self {
-            case .disconnected: return "�����ѽ����������¿�ʼͬ����"
-            case .unexpectedText: return "���񷵻��˷�Ԥ�ڸ�ʽ������ͬ������Ȩ�ޡ�"
+            case .disconnected: return "连接已结束，请重新开始同传。"
+            case .unexpectedText: return "服务返回了非预期格式，请检查同传服务权限。"
             }
         }
     }

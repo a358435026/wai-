@@ -28,7 +28,7 @@ final class ASTProtocolTests: XCTestCase {
         bytes += Data([0x9d, 0x06, 1, 2, 3, 4]) // unknown field 99, fixed32
         let response = try ASTResponse(data: bytes)
         XCTAssertEqual(response.event, 654)
-        XCTAssertEqual(response.text, "Hello, ��á�")
+        XCTAssertEqual(response.text, "Hello, 你好。")
         XCTAssertEqual(response.sessionID, "interop-session")
         XCTAssertEqual(response.statusCode, 20000000)
         XCTAssertEqual(response.audio, Data([0, 0, 255, 127, 0, 128]))

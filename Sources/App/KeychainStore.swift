@@ -33,6 +33,6 @@ enum KeychainStore {
     }
     enum StoreError: LocalizedError {
         case status(OSStatus)
-        var errorDescription: String? { "�޷�����Կ�״�ƾ�ݣ�������ֻ������ԡ�" }
+        var errorDescription: String? { "无法保存钥匙串凭据，请解锁手机后重试。" }
     }
 }

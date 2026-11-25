@@ -10,9 +10,9 @@ final class InterpreterModel: ObservableObject {
     @Published private(set) var source = CaptionLane()
     @Published private(set) var translation = CaptionLane()
     @Published private(set) var errorMessage: String?
-    @Published private(set) var status = "׼������"
+    @Published private(set) var status = "准备就绪"
     @Published private(set) var playing = false
-    @Published private(set) var route = "������ / ����"
+    @Published private(set) var route = "扬声器 / 耳机"
     @Published var direction = 0
     @Published var micMuted = false
     @Published var playbackEnabled = true {
@@ -29,7 +29,7 @@ final class InterpreterModel: ObservableObject {
     private var drainTask: Task<Void, Never>?
     private var observers: [NSObjectProtocol] = []
     private var generation = UUID()
-    let directions = ["���� �� English", "English �� ����", "��Ӣ�Զ�����"]
+    let directions = ["中文 → English", "English → 中文", "中英自动互译"]
     var active: Bool { phase != .idle }
     var configuration: ASTConfiguration {
         switch direction {
@@ -45,7 +45,7 @@ final class InterpreterModel: ObservableObject {
                                              object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in
                 guard let self, self.active else { return }
-                self.fail("��Ƶ�����������Ӧ���жϡ��뷵�غ����¿�ʼ��")
+                self.fail("音频被来电或其他应用中断。请返回后重新开始。")
             }
         })
         observers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification,
@@ -53,9 +53,9 @@ final class InterpreterModel: ObservableObject {
             let reason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
             Task { @MainActor in
                 guard let self else { return }
-                self.route = self.audio?.routeName ?? "������ / ����"
+                self.route = self.audio?.routeName ?? "扬声器 / 耳机"
                 if self.active && reason == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue {
-                    self.fail("��������Ƶ�豸�ѶϿ�����ȷ�ϲ����豸�����¿�ʼ��")
+                    self.fail("耳机或音频设备已断开。请确认播放设备后重新开始。")
                 }
             }
         })
@@ -64,7 +64,7 @@ final class InterpreterModel: ObservableObject {
             Task { @MainActor in
                 guard let self, self.active else { return }
                 self.cleanup()
-                self.status = "��ֹͣ��Ӧ�ý����̨"
+                self.status = "已停止：应用进入后台"
             }
         })
     }
@@ -83,7 +83,7 @@ final class InterpreterModel: ObservableObject {
         guard phase == .idle else { return }
         guard let key = KeychainStore.read(), !key.isEmpty else { showSettings = true; return }
         clearCaptions(); micMuted = false
-        phase = .connecting; status = "����������˷粢����"
+        phase = .connecting; status = "正在申请麦克风并连接"
         let run = UUID(); generation = run
         connectionTask = Task { [weak self] in
             guard let self else { return }
@@ -91,8 +91,8 @@ final class InterpreterModel: ObservableObject {
                 AVAudioApplication.requestRecordPermission { continuation.resume(returning: $0) }
             }
             guard self.generation == run && !Task.isCancelled else { return }
-            guard allowed else { self.fail("��˷�Ȩ��δ���������� iPhone ��������������ͬ��ʹ����˷硣"); return }
-            self.status = "�������ӻ�ɽ����"
+            guard allowed else { self.fail("麦克风权限未开启。请在 iPhone 设置中允许随声同传使用麦克风。"); return }
+            self.status = "正在连接火山引擎"
             let client = ASTClient(onResponse: { [weak self] response in
                 guard let self, self.generation == run else { return }
                 self.receive(response)
@@ -104,7 +104,7 @@ final class InterpreterModel: ObservableObject {
             self.deadlineTask = Task { [weak self] in
                 do { try await Task.sleep(nanoseconds: 20_000_000_000) } catch { return }
                 guard let self, self.generation == run, self.phase == .connecting else { return }
-                self.fail("���ӳ�ʱ���������硢API Key ��ͬ����������Ƿ��ѿ�ͨ��")
+                self.fail("连接超时。请检查网络、API Key 和同声传译服务是否已开通。")
             }
             do { try await client.connect(key: key, configuration: self.configuration) }
             catch { if self.generation == run && !Task.isCancelled { self.fail(self.describe(error)) } }
@@ -113,7 +113,7 @@ final class InterpreterModel: ObservableObject {
 
     private func receive(_ response: ASTResponse) {
         if ![0, 21000, 20000000].contains(response.statusCode) || response.event == 153 {
-            fail("������� \(response.statusCode)��\(response.message.isEmpty ? "�������Ȩ�ޡ������������á�" : response.message)")
+            fail("服务错误 \(response.statusCode)：\(response.message.isEmpty ? "请检查服务权限、余额和语言配置。" : response.message)")
             return
         }
         switch response.event {
@@ -148,7 +148,7 @@ final class InterpreterModel: ObservableObject {
                 if case .dropped = continuation.yield(data) {
                     Task { @MainActor in
                         guard let self, self.generation == run else { return }
-                        self.fail("���緢�ͻ�ѹ����ֹͣͬ���Ա��������ӳ١�������������ԡ�")
+                        self.fail("网络发送积压，已停止同传以避免译音延迟。请检查网络后重试。")
                     }
                 }
             }, failure: { [weak self] message in
@@ -157,7 +157,7 @@ final class InterpreterModel: ObservableObject {
                     self.fail(message)
                 }
             })
-            phase = .live; status = "��������"
+            phase = .live; status = "正在聆听"
             route = audio.routeName
             UIApplication.shared.isIdleTimerDisabled = true
             sendTask = Task { [weak self] in
@@ -177,16 +177,16 @@ final class InterpreterModel: ObservableObject {
 
     func stop() {
         guard phase != .idle else { return }
-        if phase == .connecting { cleanup(); status = "��ȡ������"; return }
+        if phase == .connecting { cleanup(); status = "已取消连接"; return }
         guard phase == .live else { return }
-        phase = .finishing; status = "����������һ��"
+        phase = .finishing; status = "正在完成最后一句"
         audio?.stopCapture(); streamContinuation?.finish()
         let run = generation
         let sender = sendTask
         deadlineTask = Task { [weak self] in
             do { try await Task.sleep(nanoseconds: 12_000_000_000) } catch { return }
             guard let self, self.generation == run else { return }
-            self.fail("����δ��ʱ�����β�����������ѹرա�����ʾ����Ļ������")
+            self.fail("服务未及时完成收尾，本次连接已关闭。已显示的字幕保留。")
         }
         Task { [weak self] in
             await sender?.value
@@ -196,7 +196,7 @@ final class InterpreterModel: ObservableObject {
     }
     private func finishReceiving() {
         deadlineTask?.cancel()
-        phase = .finishing; status = "���ڲ�������"
+        phase = .finishing; status = "正在播完译音"
         audio?.stopCapture(); streamContinuation?.finish()
         sendTask?.cancel()
         client?.disconnect()
@@ -209,11 +209,11 @@ final class InterpreterModel: ObservableObject {
             }
             guard let self, self.generation == run else { return }
             self.source.end(); self.translation.end()
-            self.cleanup(); self.status = "����ͬ���ѽ���"
+            self.cleanup(); self.status = "本次同传已结束"
         }
     }
     func fail(_ message: String) {
-        cleanup(); errorMessage = message; status = "������ֹͣ"
+        cleanup(); errorMessage = message; status = "连接已停止"
     }
     private func cleanup() {
         generation = UUID()
@@ -228,7 +228,7 @@ final class InterpreterModel: ObservableObject {
     private func describe(_ error: Error) -> String {
         let nsError = error as NSError
         if nsError.domain == NSURLErrorDomain {
-            return "��������ʧ�ܣ�\(nsError.code)�����������磬�Լ���ɽ���� API Key������ͬ������Ȩ�ޡ�"
+            return "网络连接失败（\(nsError.code)）。请检查网络，以及火山引擎 API Key、余额和同传服务权限。"
         }
         return error.localizedDescription
     }

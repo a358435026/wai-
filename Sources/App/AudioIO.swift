@@ -32,7 +32,7 @@ private final class CaptureConverter: @unchecked Sendable {
             used = true; inputStatus.pointee = .haveData; return input
         }
         if error != nil || status == .error {
-            failed = true; failure("��˷���Ƶת��ʧ�ܣ������¿�ʼ��"); return
+            failed = true; failure("麦克风音频转换失败，请重新开始。"); return
         }
         guard output.frameLength > 0, let pointer = output.int16ChannelData?[0] else { return }
         let data = Data(bytes: pointer, count: Int(output.frameLength) * 2)
@@ -48,8 +48,8 @@ enum AudioError: LocalizedError {
     case format, playbackOverflow
     var errorDescription: String? {
         switch self {
-        case .format: return "��ǰ��Ƶ�豸�޷�ʹ�ã���Ͽ��쳣��Ƶ�豸�����ԡ�"
-        case .playbackOverflow: return "������ѹ���� 20 �룬��ֹͣͬ����������������¿�ʼ��"
+        case .format: return "当前音频设备无法使用，请断开异常音频设备后重试。"
+        case .playbackOverflow: return "译音积压超过 20 秒，已停止同传。请检查网络后重新开始。"
         }
     }
 }
@@ -130,6 +130,6 @@ final class AudioIO {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
     var routeName: String {
-        AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portName).joined(separator: "��")
+        AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portName).joined(separator: "、")
     }
 }

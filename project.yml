@@ -21,8 +21,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.tongchuan.personal
         PRODUCT_NAME: Tongchuan
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: ����ͬ��
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: ���ڽ���˵�Ļ�ʵʱ�������Ļ����������Ƶ�ᴫ�������õĻ�ɽ�������
+        INFOPLIST_KEY_CFBundleDisplayName: 随声同传
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: 用于将你说的话实时翻译成字幕和语音。音频会传至你配置的火山引擎服务。
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait

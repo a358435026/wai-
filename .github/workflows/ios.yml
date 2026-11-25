@@ -17,7 +17,7 @@ jobs:
       - name: Record Xcode and simulator environment
         run: |
           xcodebuild -version
-          xcrun simctl list devices available
+          swift --version
       - name: Test official protocol interoperability and audio framing
         run: swift test
       - name: Generate Xcode project
