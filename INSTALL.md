@@ -1,14 +1,15 @@
 # 在 iPhone 上安装与验证
 
-交付的 `Tongchuan-unsigned.ipa` 是 iPhone 真机目标产物（arm64 / iPhoneOS），最低 iOS 17。
+交付的 `Tongchuan-iOS15-unsigned.ipa` 是 iPhone 真机目标产物（arm64 / iPhoneOS），最低 iOS 15.0。
 它没有签名或 embedded.mobileprovision，不能直接在手机点开安装。
 
 ## 已安装 TrollStore / 越狱设备
 
-用户选择此安装路线。请先确认准确的 iOS 版本：当前构建要求 iOS 17，不能直接装到 iOS 16 或更低版本。
-安装工具支持的系统范围与 App 的最低系统要求是两件事；降低 Info.plist 数字也不能让较新系统 API 自动兼容旧系统。
+用户已提供设备：iPhone 13 Pro、iOS 15.4.1，并选择此安装路线。
+请使用 0.1.1 iOS15 修复版。不要使用此前最低要求 iOS 17 的 0.1.0 包。
+本次同时调整了源代码的系统 API、部署目标与二进制检查，并非仅修改 Info.plist 数字。
 
-在系统和 App 兼容的前提下，将 IPA 传到手机，用已经安装的 TrollStore 打开并安装。
+将修复版 IPA 传到手机，用已经安装的 TrollStore 打开并覆盖安装，然后重试启动。
 TrollStore 会处理安装签名，不需要把 Apple 账号或开发证书交给本项目。
 如使用其他越狱安装器，请提供工具名称和系统版本，再核对安装要求。
 
@@ -20,7 +21,7 @@ TrollStore 官方支持说明：https://github.com/opa334/TrollStore
 ## 使用这台电脑已有的 Sideloadly
 
 1. 使用 USB 连接 iPhone，解锁并按手机提示信任此电脑。
-2. 打开 Sideloadly，选择这台手机，把 `Tongchuan-unsigned.ipa` 拖入应用。
+2. 打开 Sideloadly，选择这台手机，把 `Tongchuan-iOS15-unsigned.ipa` 拖入应用。
 3. 在 Sideloadly 中由你本人完成 Apple 账号、签名和验证步骤。账号、密码和验证码不要写入仓库或发到聊天中。
 4. 完成后按 iPhone 系统提示信任你自己的签名；如系统要求开发者模式，按系统说明完成。
 5. 打开「随声同传」，进入设置，输入你自己的火山引擎 API Key。请先开通同声传译服务并确认计费额度。

@@ -25,7 +25,8 @@ SwiftUI + AVAudioEngine + 火山引擎官方 AST S2S。无需豆包 App、越狱
 
 ## 本地或 GitHub 构建
 
-需要 Mac + Xcode（支持 iOS 17+ SDK）与 XcodeGen。
+需要 Mac + Xcode（支持 iOS 15 部署目标）与 XcodeGen。当前最低系统为 iOS 15.0。
+0.1.1 已替换 iOS 16/17 专属的无保护界面 API，并为旧系统使用 AVAudioSession 麦克风权限实现。
 
 ```sh
 swift test
@@ -35,11 +36,12 @@ open Tongchuan.xcodeproj
 ```
 
 GitHub Actions `.github/workflows/ios.yml` 在 macOS 上执行核心测试、真机目标编译和模拟器启动测试。
-产物 `Tongchuan-unsigned.ipa` **未签名，不能直接安装**。可由用户使用自己的签名方式安装；
+产物 `Tongchuan-iOS15-unsigned.ipa` **未签名，需要安装工具处理签名**。可由用户使用自己的签名方式安装；
 也可在 Xcode 选择自己的 Apple Team 和真机进行签名运行。TestFlight 需要开发者账号和发布配置。
 未将证书、Apple ID 或 API Key 放入 Actions。
 
 安装步骤见 [INSTALL.md](INSTALL.md)，实际构建结果见 [VALIDATION.md](VALIDATION.md)。
+CI 会同时检查 Info.plist 和 Mach-O 内的最低系统版本，确保不超过目标 iOS 15.4.1。
 
 ## 真机验收清单（构建成功不能替代）
 
