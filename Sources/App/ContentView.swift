@@ -85,7 +85,7 @@ struct ContentView: View {
                 ForEach(model.directions.indices, id: \.self) { Text(model.directions[$0]).tag($0) }
             }.pickerStyle(.menu).tint(.primary).disabled(model.active)
             Spacer()
-            Text("S2S").font(.caption.monospaced()).foregroundStyle(teal)
+            Text("实时").font(.caption).foregroundStyle(teal)
         }.padding(12).background(.white, in: RoundedRectangle(cornerRadius: 18))
     }
     private var statusCard: some View {
@@ -160,7 +160,7 @@ private struct SettingsView: View {
                 }
                 Section("语音播放") {
                     Toggle("自动播放译音", isOn: $model.playbackEnabled)
-                    Text("采用官方 S2S 译音。未指定音色时，服务默认跟随输入说话人的音色。")
+                    Text("采用官方译音，默认跟随输入说话人的音色。")
                         .font(.footnote).foregroundStyle(.secondary)
                     Text("首版需保持应用在前台。进入后台或音频被中断时会结束连接；会话运行期间屏幕保持唤醒。")
                         .font(.footnote).foregroundStyle(.secondary)
