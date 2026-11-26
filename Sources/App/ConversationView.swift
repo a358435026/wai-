@@ -22,7 +22,7 @@ struct ContentView: View {
     @State private var showCaptions = true
     @State private var showScenes = false
     @State private var showDiagnostics = false
-    @State private var scene = "面对面对话"
+    @State private var scene = "中译英对话"
     private var hasCaptions: Bool {
         model.source.captions.contains { !$0.text.isEmpty } || model.translation.captions.contains { !$0.text.isEmpty }
     }
@@ -31,7 +31,7 @@ struct ContentView: View {
             VStack(spacing: VoiceTheme.spacing) {
                 toolbar.padding(.top, 12)
                 if showCaptions && hasCaptions { transcript }
-                else { listeningArea }
+                else { listeningArea(height: geometry.size.height) }
                 if let error = model.errorMessage {
                     Text(error).font(.footnote).foregroundColor(.red)
                         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
@@ -83,11 +83,11 @@ struct ContentView: View {
             }.accessibilityLabel(showCaptions ? "隐藏字幕" : "显示字幕")
         }
     }
-    private var listeningArea: some View {
+    private func listeningArea(height: CGFloat) -> some View {
         VStack(spacing: VoiceTheme.spacing) {
             Spacer(minLength: 0)
             VoiceOrb(level: model.inputLevel, active: model.phase == .live, playing: model.playing)
-                .frame(width: VoiceTheme.orb, height: VoiceTheme.orb)
+                .frame(width: orbSide(height), height: orbSide(height))
                 .accessibilityLabel(model.active ? "语音会话进行中" : "同声传译待机")
             VStack(spacing: 10) {
                 Text("随声同传").font(.title2.weight(.semibold))
@@ -177,13 +177,19 @@ struct ContentView: View {
                 .background(Color.white.opacity(selected ? 0.80 : 0.30), in: Circle())
         }.accessibilityLabel(label)
     }
+    private func orbSide(_ height: CGFloat) -> CGFloat {
+        min(VoiceTheme.orb, max(100, height * 0.33 - (model.errorMessage == nil ? 0 : 90)))
+    }
     private var sceneSheet: some View {
         NavigationView {
             Form {
                 Section("使用场景") {
-                    Button { scene = "面对面对话"; model.direction = 2 } label: {
-                        Label("面对面对话 · 中英自动互译", systemImage: "person.2")
+                    Button { scene = "中译英对话"; model.direction = 0 } label: {
+                        Label("面对面 · 中文译为英语", systemImage: "person.2")
                     }.accessibilityIdentifier("faceToFaceScene")
+                    Button { scene = "英译中对话"; model.direction = 1 } label: {
+                        Label("面对面 · 英语译为中文", systemImage: "person.2")
+                    }
                     Button { scene = "会议听译"; if model.direction == 2 { model.direction = 0 } } label: {
                         Label("会议听译 · 单向连续翻译", systemImage: "person.3")
                     }
@@ -192,7 +198,7 @@ struct ContentView: View {
                     Picker("方向", selection: $model.direction) {
                         ForEach(model.directions.indices, id: \.self) { Text(model.directions[$0]).tag($0) }
                     }
-                    Text("切换场景或方向前需要结束当前会话。会议听译使用手机麦克风收音。")
+                    Text("切换场景或方向前需要结束当前会话。会议听译使用手机麦克风收音。中英自动互译为测试选项，本次官方服务实测曾返回内部错误；建议先使用明确的翻译方向。")
                         .font(.footnote).foregroundColor(.secondary)
                 }
             }.navigationTitle("对话场景").navigationBarTitleDisplayMode(.inline)

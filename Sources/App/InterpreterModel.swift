@@ -17,7 +17,7 @@ final class InterpreterModel: ObservableObject {
     @Published private(set) var capturedPackets = 0
     @Published private(set) var sentPackets = 0
     @Published private(set) var receivedAudioBytes = 0
-    @Published var direction = 2
+    @Published var direction = 0
     @Published var micMuted = false
     @Published var playbackEnabled = true {
         didSet { if !playbackEnabled { audio?.clearPlayback() } }
@@ -36,7 +36,7 @@ final class InterpreterModel: ObservableObject {
     private var skipCurrentSpeech = false
     private var observers: [NSObjectProtocol] = []
     private var generation = UUID()
-    let directions = ["中文 → English", "English → 中文", "中英自动互译"]
+    let directions = ["中文 → English", "English → 中文", "中英自动互译（测试）"]
     var active: Bool { phase != .idle }
     var configuration: ASTConfiguration {
         switch direction {
