@@ -10,3 +10,6 @@ Playback interruption discards the current sentence locally until the next TTS s
 
 
 0.2.1 replaces the input tap/voice-processing/converter chain after the device reported no effective captured packet with permission granted. PCMInputQueue owns native recording buffers and dispatches raw PCM and metering; offline microphone testing uses this same path without creating ASTClient. A playback mixer tap supplies actual output-level feedback to the Canvas/TimelineView renderer. Input callback and byte counts distinguish native capture failure from framing/sending failure. There is no claim of full-duplex speaker echo cancellation: while built-in speaker playback is active and during a 350ms tail, uploaded capture is replaced with silence; headphone routes retain duplex upload.
+
+
+0.3.0 adds a typed language capability catalog and validates source/target combinations before starting a session. Selected languages and subtitle preference are non-secret UserDefaults values. Unsupported default speech targets request true S2T without target_audio, rather than generating chargeable audio and merely muting playback. Explicit subtitle-only mode does the same. AudioQueue and playback paths are unchanged from the phone-confirmed 0.2.1 build.

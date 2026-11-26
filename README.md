@@ -2,14 +2,16 @@
 
 SwiftUI + AVAudioEngine + 火山引擎官方 AST S2S。无需豆包 App、越狱或注入。
 
-## 0.3.0 多语种与仅字幕
+## 0.3.1 多语种与仅字幕
+
+16项核心测试和4项原生模拟器UI用例通过。修复了搜索选中语言后的返回流程；正式使用前可按下方真机清单验收新增语种。
 
 - 按官方AST2.0目录加入48种语言、9种输入方言与中英混合识别；源语言和目标语言独立选择，可搜索、交换，并记住上次选择。
 - 当前接口至少一端为中文或英语；方言/中英混合识别只译为中文或英语。界面只展示当前源语言允许的目标。
 - 16种目标语言使用本版已实现的默认译音路径；其他目标自动请求S2T仅字幕，明确提示不提供本版译音。不能把字幕支持数当成译音支持数。
 - 新增真正的服务端“仅字幕”：StartSession模式为s2t且不发送target_audio。底部扬声器静音仍仅控制本机播放。
 - 不改动0.2.1已通过用户真机验证的AudioQueue采集和播放器实现。
-- 多语种真实接口验证与本次构建结果见VALIDATION.md；不能把UI可选目录认定为所有语种已逐一真机验收。
+- 多语种真实接口验证与本次构建结果见VALIDATION.md；已短测中译日/西/印尼的字幕与译音、西译中的字幕与译音、印地语与西班牙语仅字幕；其中西语仅字幕和反向初次发生服务内部错误/超时，单独复测成功。不能把UI可选目录认定为所有语种已逐一真机验收。
 
 ## 0.2.1 采集与动态反馈修复
 
@@ -34,7 +36,7 @@ b5同时将“更多”改为常规按钮与原生操作面板，10项核心测�
 
 ## 功能
 
-- 中文→英语、英语→中文、中英自动互译；实时原文与译文字幕。
+- 可搜索的多语种源/目标选择；实时原文与译文字幕；中英自动互译仍为实验选项。
 - 16 kHz / mono / PCM16 录音，按官方建议以 80 ms 音频分片发送。
 - 先准备麦克风并确认首包，服务端确认 SessionStarted 后才上传音频；收到 PCM16 译音即排队播放。
 - AudioQueue 录音、独立 AVAudioEngine 译音播放、麦克风静音、译音静音、结束时接收并播完尾句。
@@ -106,7 +108,7 @@ CI 会同时检查 Info.plist 和 Mach-O 内的最低系统版本，确保不超
 
 - 阿里云百炼Qwen3.8-LiveTranslate-Flash-Realtime：北京地域音频输入40元/百万Token、输出音频160元/百万Token、文字输出100元/百万Token；音频每秒输入7Token、输出12.5Token。输入/输出各一小时的音频费用合计8.208元，文字另计。该值是按官网换算的估算，不代表已在用户网络验证质量、可用性或延迟。
 - DeepSeek官方新增ASR/TTS工具接口：ASR目前非流式，一次最长120秒，更适合按句翻译；默认TTS支持10种语言，未列西班牙语/法语/德语/葡萄牙语。可以组合ASR→文字翻译→TTS，但不是替换当前WebSocket地址或Key即可。
-- DeepSeek限时ASR为0.39元/小时，TTS为1.5元/万字符，文字模型Token费另算。按字符和按音频时长无法不作假设地直接互换；活动价格会变。
+- DeepSeek限时ASR为0.39元/小时，TTS为1.5元/万计费字符（一个汉字计2字符，字母、数字、空格各计1字符），文字模型Token费另算。按字符和按音频时长无法不作假设地直接互换；活动价格会变。
 - 稳定性需要相同音频、手机、网络和地域做实际对比。此前用户无音频问题已定位为客户端采集路径，不能视作服务供应商稳定性对比。
 
 来源：
@@ -116,3 +118,5 @@ https://www.alibabacloud.com/help/en/model-studio/qwen3-5-livetranslate-flash-re
 https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
 https://api-docs.deepseek.com/guides/asr/
 https://api-docs.deepseek.com/guides/tts/
+
+参考：[火山计费](https://docs.volcengine.com/docs/doubao-voice/billing-instructions?lang=zh)、[百炼北京价格](https://help.aliyun.com/zh/model-studio/qwen3-8-livetranslate-flash-realtime)、[百炼音频计量](https://www.alibabacloud.com/help/en/model-studio/qwen3-5-livetranslate-flash-realtime)、[DeepSeek价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)、[ASR限制](https://api-docs.deepseek.com/guides/asr/)、[TTS语种及字符计量](https://api-docs.deepseek.com/guides/tts/)。
