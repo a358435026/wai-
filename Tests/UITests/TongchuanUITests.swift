@@ -1,9 +1,33 @@
 import XCTest
 
 final class TongchuanUITests: XCTestCase {
+    func testSearchLanguageSwapAndTrueSubtitlesMode() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-reset-languages"]
+        app.launchArguments.append("--ui-reset-languages")
+        app.launch()
+        app.buttons["scenePicker"].tap()
+        app.buttons["targetLanguagePicker"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("西班牙")
+        app.buttons["language-es"].tap()
+        XCTAssertTrue(app.staticTexts["西班牙语（墨西哥）"].waitForExistence(timeout: 5))
+        app.buttons["swapLanguages"].tap()
+        XCTAssertTrue(app.staticTexts["中文（普通话）"].exists)
+        app.buttons["swapLanguages"].tap()
+        app.switches["subtitlesOnly"].tap()
+        let pair = XCTAttachment(screenshot: app.screenshot())
+        pair.name = "Spanish language selection and subtitle service mode"
+        pair.lifetime = .keepAlways; add(pair)
+        app.buttons["完成"].tap()
+        XCTAssertTrue(app.buttons["scenePicker"].label.contains("西班牙语"))
+        XCTAssertTrue(app.staticTexts["仅字幕：本次不生成译音"].exists)
+    }
     func testSpeakingVisualizationAndOfflineMicrophoneEntry() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-speaking"]
+        app.launchArguments.append("--ui-reset-languages")
         app.launch()
         XCTAssertTrue(app.buttons["voiceStatus"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["正在播报 · 点击打断"].exists)
@@ -18,6 +42,7 @@ final class TongchuanUITests: XCTestCase {
     }
     func testLaunchAndCredentialSetup() throws {
         let app = XCUIApplication()
+        app.launchArguments.append("--ui-reset-languages")
         app.launch()
         XCTAssertTrue(app.buttons["scenePicker"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["mainAction"].exists)
@@ -45,6 +70,7 @@ final class TongchuanUITests: XCTestCase {
     func testCaptionDisplayCanBeHiddenWithoutStoppingSession() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-captions"]
+        app.launchArguments.append("--ui-reset-languages")
         app.launch()
         XCTAssertTrue(app.staticTexts["您好，我想了解这款电动车的续航和交货时间。"].waitForExistence(timeout: 10))
         let attachment = XCTAttachment(screenshot: app.screenshot())

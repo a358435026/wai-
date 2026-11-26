@@ -2,6 +2,15 @@
 
 SwiftUI + AVAudioEngine + 火山引擎官方 AST S2S。无需豆包 App、越狱或注入。
 
+## 0.3.0 多语种与仅字幕
+
+- 按官方AST2.0目录加入48种语言、9种输入方言与中英混合识别；源语言和目标语言独立选择，可搜索、交换，并记住上次选择。
+- 当前接口至少一端为中文或英语；方言/中英混合识别只译为中文或英语。界面只展示当前源语言允许的目标。
+- 16种目标语言使用本版已实现的默认译音路径；其他目标自动请求S2T仅字幕，明确提示不提供本版译音。不能把字幕支持数当成译音支持数。
+- 新增真正的服务端“仅字幕”：StartSession模式为s2t且不发送target_audio。底部扬声器静音仍仅控制本机播放。
+- 不改动0.2.1已通过用户真机验证的AudioQueue采集和播放器实现。
+- 多语种真实接口验证与本次构建结果见VALIDATION.md；不能把UI可选目录认定为所有语种已逐一真机验收。
+
 ## 0.2.1 采集与动态反馈修复
 
 用户在 iOS15.4.1 已授权后仍无有效 PCM 包。新版将录音独立为 AudioQueue PCM16/16k/mono，移除 AVAudioEngine 输入 tap + voice processing + 手动转换链；播放器继续使用独立 AVAudioEngine。
@@ -89,3 +98,21 @@ CI 会同时检查 Info.plist 和 Mach-O 内的最低系统版本，确保不超
 - https://developer.apple.com/documentation/avfaudio/avaudioionode/setvoiceprocessingenabled(_:)
 
 这是独立个人自用客户端，与豆包 App 无隶属关系。
+
+
+## 其他供应商接入评估（2026-11-26）
+
+当前安装包仍使用火山引擎官方AST，没有将DeepSeek Key当成火山Key使用，也未加入伪装可用的供应商选项。
+
+- 阿里云百炼Qwen3.8-LiveTranslate-Flash-Realtime：北京地域音频输入40元/百万Token、输出音频160元/百万Token、文字输出100元/百万Token；音频每秒输入7Token、输出12.5Token。输入/输出各一小时的音频费用合计8.208元，文字另计。该值是按官网换算的估算，不代表已在用户网络验证质量、可用性或延迟。
+- DeepSeek官方新增ASR/TTS工具接口：ASR目前非流式，一次最长120秒，更适合按句翻译；默认TTS支持10种语言，未列西班牙语/法语/德语/葡萄牙语。可以组合ASR→文字翻译→TTS，但不是替换当前WebSocket地址或Key即可。
+- DeepSeek限时ASR为0.39元/小时，TTS为1.5元/万字符，文字模型Token费另算。按字符和按音频时长无法不作假设地直接互换；活动价格会变。
+- 稳定性需要相同音频、手机、网络和地域做实际对比。此前用户无音频问题已定位为客户端采集路径，不能视作服务供应商稳定性对比。
+
+来源：
+https://docs.volcengine.com/docs/doubao-voice/simultaneous-interpretation-1?lang=zh
+https://help.aliyun.com/zh/model-studio/qwen3-8-livetranslate-flash-realtime
+https://www.alibabacloud.com/help/en/model-studio/qwen3-5-livetranslate-flash-realtime
+https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
+https://api-docs.deepseek.com/guides/asr/
+https://api-docs.deepseek.com/guides/tts/

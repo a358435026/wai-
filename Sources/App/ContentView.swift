@@ -34,6 +34,11 @@ struct SettingsView: View {
                     Text("不需要 API Key，也不消耗服务额度。若已授权仍无法收音，可在连接诊断查看队列回调和设备信息。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                Section("翻译输出") {
+                    Toggle("仅字幕，不生成译音", isOn: $model.subtitlesOnly).disabled(model.active)
+                    Text("这是服务端仅字幕模式，可避免生成译音。底部扬声器开关只控制本机播放。语言选择在首页顶部入口。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("语音播放") {
                     Toggle("自动播放译音", isOn: $model.playbackEnabled)
                     Text("采用官方译音。外放时轮流收说以避免回声；戴耳机可同时收听与说话。")

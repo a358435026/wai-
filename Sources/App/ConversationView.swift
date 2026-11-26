@@ -23,7 +23,6 @@ struct ContentView: View {
     @State private var showScenes = false
     @State private var showDiagnostics = false
     @State private var showMore = false
-    @State private var scene = "中译英对话"
     private var hasCaptions: Bool {
         model.source.captions.contains { !$0.text.isEmpty } || model.translation.captions.contains { !$0.text.isEmpty }
     }
@@ -76,7 +75,7 @@ struct ContentView: View {
             Button { showScenes = true } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "square.grid.2x2.fill")
-                    Text(scene).font(.headline)
+                    Text(model.translationTitle).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
                 }.padding(.horizontal, 18).padding(.vertical, 13)
                     .background(Color.white.opacity(0.30), in: Capsule())
             }.disabled(model.active).accessibilityIdentifier("scenePicker")
@@ -95,7 +94,7 @@ struct ContentView: View {
                 .accessibilityLabel(model.active ? "语音会话进行中" : "同声传译待机")
             VStack(spacing: 10) {
                 Text(model.localTest ? "本机麦克风测试" : "随声同传").font(.title2.weight(.semibold))
-                Text(model.localTest ? "不联网，不消耗同传额度" : model.directions[model.direction]).font(.subheadline).foregroundColor(VoiceTheme.muted)
+                Text(model.localTest ? "不联网，不消耗同传额度" : model.translationTitle).font(.subheadline).foregroundColor(VoiceTheme.muted)
             }
             Spacer(minLength: 0)
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -146,6 +145,10 @@ struct ContentView: View {
             if model.micMuted && model.active {
                 Text("麦克风已静音，会话仍可能计费").font(.caption).foregroundColor(VoiceTheme.muted)
             }
+            if !model.producesSpeech && !model.localTest {
+                Text("仅字幕：本次不生成译音").font(.caption).foregroundColor(VoiceTheme.muted)
+                    .accessibilityIdentifier("outputModeHint")
+            }
             if model.capturePausedForSpeaker {
                 Text("外放播报中 · 暂停上传收音防止回声").font(.caption).foregroundColor(VoiceTheme.muted)
             }
@@ -164,10 +167,11 @@ struct ContentView: View {
                          label: model.micMuted ? "打开麦克风" : "麦克风静音", selected: !model.micMuted) {
                 model.micMuted.toggle()
             }.disabled(model.phase != .live)
-            circleButton(icon: model.playbackEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill",
-                         label: model.playbackEnabled ? "关闭译音" : "开启译音", selected: model.playbackEnabled) {
+            circleButton(icon: model.playbackEnabled && model.producesSpeech ? "speaker.wave.2.fill" : "speaker.slash.fill",
+                         label: !model.producesSpeech ? "仅字幕模式" : (model.playbackEnabled ? "关闭译音" : "开启译音"),
+                         selected: model.playbackEnabled && model.producesSpeech) {
                 model.playbackEnabled.toggle()
-            }
+            }.disabled(!model.producesSpeech)
             Button { if model.active { model.stop() } else { model.start() } } label: {
                 Image(systemName: model.active ? "xmark" : "waveform")
                     .font(.system(size: 27, weight: .semibold))
@@ -191,25 +195,54 @@ struct ContentView: View {
     private var sceneSheet: some View {
         NavigationView {
             Form {
-                Section("使用场景") {
-                    Button { scene = "中译英对话"; model.direction = 0 } label: {
-                        Label("面对面 · 中文译为英语", systemImage: "person.2")
-                    }.accessibilityIdentifier("faceToFaceScene")
-                    Button { scene = "英译中对话"; model.direction = 1 } label: {
-                        Label("面对面 · 英语译为中文", systemImage: "person.2")
-                    }
-                    Button { scene = "会议听译"; if model.direction == 2 { model.direction = 0 } } label: {
-                        Label("会议听译 · 单向连续翻译", systemImage: "person.3")
-                    }
-                }
-                Section("翻译方向") {
-                    Picker("方向", selection: $model.direction) {
-                        ForEach(model.directions.indices, id: \.self) { Text(model.directions[$0]).tag($0) }
-                    }
-                    Text("切换场景或方向前需要结束当前会话。会议听译使用手机麦克风收音。中英自动互译为测试选项，本次官方服务实测曾返回内部错误；建议先使用明确的翻译方向。")
+                Section("翻译语言") {
+                    NavigationLink {
+                        LanguageSelectionView(title: "源语言", options: ASTLanguages.sources,
+                            selected: model.sourceCode, showSpeechSupport: false, select: model.selectSource)
+                    } label: {
+                        HStack { Text("源语言"); Spacer(); Text(model.sourceLanguage.name).foregroundColor(.secondary) }
+                    }.accessibilityIdentifier("sourceLanguagePicker")
+                    NavigationLink {
+                        LanguageSelectionView(title: "目标语言", options: model.availableTargets,
+                            selected: model.targetCode, showSpeechSupport: true, select: model.selectTarget)
+                    } label: {
+                        HStack { Text("目标语言"); Spacer(); Text(model.targetLanguage.name).foregroundColor(.secondary) }
+                    }.accessibilityIdentifier("targetLanguagePicker")
+                    Button { model.swapLanguages() } label: {
+                        Label("交换源语言与目标语言", systemImage: "arrow.up.arrow.down")
+                    }.disabled(!model.canSwap).accessibilityIdentifier("swapLanguages")
+                    Text("当前接口要求至少一端为中文或英语。方言仅作为输入；中英混合识别只能译成中文或英语。")
                         .font(.footnote).foregroundColor(.secondary)
                 }
-            }.navigationTitle("对话场景").navigationBarTitleDisplayMode(.inline)
+                Section("输出方式") {
+                    Toggle("仅字幕，不生成译音", isOn: $model.subtitlesOnly)
+                        .accessibilityIdentifier("subtitlesOnly")
+                    if !model.targetLanguage.defaultSpeech && !model.bidirectional {
+                        Text("本版\(model.targetLanguage.name)暂仅提供字幕，已自动采用不生成译音的模式。")
+                            .font(.footnote).foregroundColor(.secondary)
+                    } else {
+                        Text(model.subtitlesOnly ? "服务端仅返回字幕，不生成翻译语音。" : "服务端返回双语字幕和翻译语音。关闭底部扬声器只静音；要停止生成译音，请在这里启用仅字幕。")
+                            .font(.footnote).foregroundColor(.secondary)
+                    }
+                }
+                Section("常用方向") {
+                    Button { model.selectPair(source: "zh", target: "en") } label: {
+                        Label("中文译为英语", systemImage: "person.2")
+                    }.accessibilityIdentifier("faceToFaceScene")
+                    Button { model.selectPair(source: "en", target: "zh") } label: {
+                        Label("英语译为中文", systemImage: "person.2")
+                    }
+                    Button { model.selectBidirectional() } label: {
+                        Label("中英免切换互译（测试）", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    if model.bidirectional {
+                        Text("中英自动互译仍在测试，若服务报错，请选择明确的源语言和目标语言。")
+                            .font(.footnote).foregroundColor(.secondary)
+                    }
+                }
+                Section { Text("切换语言或输出方式前需要结束当前会话。会记住上次选择的语言与字幕模式。")
+                    .font(.footnote).foregroundColor(.secondary) }
+            }.navigationTitle("语言与输出").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { showScenes = false } } }
         }.navigationViewStyle(.stack)
     }
@@ -218,6 +251,8 @@ struct ContentView: View {
             Form {
                 Section("当前会话") {
                     LabeledContentCompat("状态", model.status)
+                    LabeledContentCompat("翻译方向", model.translationTitle)
+                    LabeledContentCompat("服务模式", model.producesSpeech ? "字幕与译音 S2S" : "仅字幕 S2T")
                     LabeledContentCompat("麦克风权限", model.microphonePermission)
                     LabeledContentCompat("录音方式", "原生 PCM 录音队列")
                     LabeledContentCompat("输入设备", model.inputDevice)

@@ -23,7 +23,12 @@ final class InterpreterModel: ObservableObject {
     @Published private(set) var capturedPackets = 0
     @Published private(set) var sentPackets = 0
     @Published private(set) var receivedAudioBytes = 0
-    @Published var direction = 0
+    @Published private(set) var sourceCode = "zh"
+    @Published private(set) var targetCode = "en"
+    @Published private(set) var bidirectional = false
+    @Published var subtitlesOnly = false {
+        didSet { UserDefaults.standard.set(subtitlesOnly, forKey: "translation.subtitlesOnly") }
+    }
     @Published var micMuted = false
     @Published var playbackEnabled = true {
         didSet { if !playbackEnabled { audio?.clearPlayback() } }
@@ -50,18 +55,61 @@ final class InterpreterModel: ObservableObject {
     }
     private var observers: [NSObjectProtocol] = []
     private var generation = UUID()
-    let directions = ["中文 → English", "English → 中文", "中英自动互译（测试）"]
     var active: Bool { phase != .idle }
+    var sourceLanguage: ASTLanguage { ASTLanguages.source(sourceCode)! }
+    var targetLanguage: ASTLanguage { ASTLanguages.target(targetCode)! }
+    var availableTargets: [ASTLanguage] { ASTLanguages.targets(for: sourceCode) }
+    var translationTitle: String {
+        bidirectional ? "中英互译（测试）" : "\(sourceLanguage.shortName) → \(targetLanguage.shortName)"
+    }
+    var producesSpeech: Bool { configuration.mode == .speechToSpeech }
+    var canSwap: Bool { !bidirectional && ASTLanguages.target(sourceCode) != nil }
     var configuration: ASTConfiguration {
-        switch direction {
-        case 1: return ASTConfiguration(source: "en", target: "zh")
-        case 2: return ASTConfiguration(source: "zhen", target: "zhen")
-        default: return ASTConfiguration()
+        ASTConfiguration(source: bidirectional ? "zhen" : sourceCode,
+                         target: bidirectional ? "zhen" : targetCode,
+                         mode: bidirectional ? (subtitlesOnly ? .subtitles : .speechToSpeech)
+                            : ASTLanguages.mode(target: targetCode, subtitlesOnly: subtitlesOnly))
+    }
+    func selectSource(_ code: String) {
+        guard !active, ASTLanguages.source(code) != nil else { return }
+        bidirectional = false; sourceCode = code
+        if ASTLanguages.validationError(source: code, target: targetCode) != nil {
+            targetCode = code == "zh" ? "en" : "zh"
         }
+        persistLanguages()
+    }
+    func selectTarget(_ code: String) {
+        guard !active, ASTLanguages.validationError(source: sourceCode, target: code) == nil else { return }
+        bidirectional = false; targetCode = code; persistLanguages()
+    }
+    func selectPair(source: String, target: String) {
+        guard !active, ASTLanguages.validationError(source: source, target: target) == nil else { return }
+        bidirectional = false; sourceCode = source; targetCode = target; persistLanguages()
+    }
+    func swapLanguages() {
+        guard canSwap else { return }
+        selectPair(source: targetCode, target: sourceCode)
+    }
+    func selectBidirectional() {
+        guard !active else { return }
+        selectPair(source: "zh", target: "en"); bidirectional = true
+    }
+    private func persistLanguages() {
+        UserDefaults.standard.set(sourceCode, forKey: "translation.source")
+        UserDefaults.standard.set(targetCode, forKey: "translation.target")
     }
 
     init() {
+        let savedSource = UserDefaults.standard.string(forKey: "translation.source") ?? "zh"
+        let savedTarget = UserDefaults.standard.string(forKey: "translation.target") ?? "en"
+        if ASTLanguages.validationError(source: savedSource, target: savedTarget) == nil {
+            sourceCode = savedSource; targetCode = savedTarget
+        }
+        subtitlesOnly = UserDefaults.standard.bool(forKey: "translation.subtitlesOnly")
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-reset-languages") {
+            sourceCode = "zh"; targetCode = "en"; subtitlesOnly = false
+        }
         if ProcessInfo.processInfo.arguments.contains("--ui-speaking") {
             playing = true; outputLevel = 0.7
         }
@@ -148,6 +196,9 @@ final class InterpreterModel: ObservableObject {
 
     func start() {
         guard phase == .idle else { return }
+        if !bidirectional, let error = ASTLanguages.validationError(source: sourceCode, target: targetCode) {
+            errorMessage = error; return
+        }
         guard let key = KeychainStore.read(), !key.isEmpty else { showSettings = true; return }
         clearCaptions(); micMuted = false
         resetAudioStats(); localTest = false; skipCurrentSpeech = false
@@ -216,7 +267,7 @@ final class InterpreterModel: ObservableObject {
         case 350: skipCurrentSpeech = false
         case 352:
             receivedAudioBytes += response.audio.count
-            guard playbackEnabled && !skipCurrentSpeech else { return }
+            guard producesSpeech && playbackEnabled && !skipCurrentSpeech else { return }
             do { try audio?.play(response.audio) } catch { fail(error.localizedDescription) }
         case 152, 151:
             finishReceiving()

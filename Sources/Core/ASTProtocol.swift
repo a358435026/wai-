@@ -66,13 +66,21 @@ public enum ProtoWire {
     }
 }
 
+public enum ASTMode: String, Equatable, Sendable {
+    case speechToSpeech = "s2s"
+    case subtitles = "s2t"
+}
+
 public struct ASTConfiguration: Equatable, Sendable {
     public var source: String
     public var target: String
     public var speaker: String
     public var ttsResource: String
-    public init(source: String = "zh", target: String = "en", speaker: String = "", ttsResource: String = "") {
+    public var mode: ASTMode
+    public init(source: String = "zh", target: String = "en", speaker: String = "", ttsResource: String = "",
+                mode: ASTMode = .speechToSpeech) {
         self.source = source; self.target = target; self.speaker = speaker; self.ttsResource = ttsResource
+        self.mode = mode
     }
 }
 
@@ -81,12 +89,13 @@ public enum ASTRequest {
         var source = ProtoWire.string(4, "wav") + ProtoWire.string(5, "raw")
         source += ProtoWire.int(7, 16000) + ProtoWire.int(8, 16) + ProtoWire.int(9, 1)
         let target = ProtoWire.string(4, "pcm") + ProtoWire.int(7, 16000)
-        var params = ProtoWire.string(1, "s2s") + ProtoWire.string(2, configuration.source)
+        var params = ProtoWire.string(1, configuration.mode.rawValue) + ProtoWire.string(2, configuration.source)
         params += ProtoWire.string(3, configuration.target)
         if !configuration.speaker.isEmpty { params += ProtoWire.string(4, configuration.speaker) }
         if !configuration.ttsResource.isEmpty { params += ProtoWire.string(8, configuration.ttsResource) }
-        return meta(sessionID) + ProtoWire.int(2, 100) + ProtoWire.bytes(4, source)
-            + ProtoWire.bytes(5, target) + ProtoWire.bytes(6, params)
+        var result = meta(sessionID) + ProtoWire.int(2, 100) + ProtoWire.bytes(4, source)
+        if configuration.mode == .speechToSpeech { result += ProtoWire.bytes(5, target) }
+        return result + ProtoWire.bytes(6, params)
     }
     public static func audio(sessionID: String, pcm: Data) -> Data {
         meta(sessionID) + ProtoWire.int(2, 200) + ProtoWire.bytes(4, ProtoWire.bytes(14, pcm))
