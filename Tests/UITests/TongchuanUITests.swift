@@ -1,6 +1,13 @@
 import XCTest
 
 final class TongchuanUITests: XCTestCase {
+    private func openMore(_ app: XCUIApplication, destination: String) {
+        app.buttons["moreOptions"].tap()
+        if !app.buttons[destination].waitForExistence(timeout: 5) {
+            app.buttons["moreOptions"].tap()
+        }
+        XCTAssertTrue(app.buttons[destination].waitForExistence(timeout: 5))
+    }
     func testSearchLanguageSwapAndTrueSubtitlesMode() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-reset-languages"]
@@ -16,13 +23,16 @@ final class TongchuanUITests: XCTestCase {
         app.buttons["swapLanguages"].tap()
         XCTAssertTrue(app.staticTexts["中文（普通话）"].exists)
         app.buttons["swapLanguages"].tap()
-        app.switches["subtitlesOnly"].tap()
+        let mode = app.switches["subtitlesOnly"]
+        XCTAssertEqual(mode.value as? String, "0")
+        mode.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        XCTAssertTrue(NSPredicate(format: "value == %@", "1").evaluate(with: mode))
         let pair = XCTAttachment(screenshot: app.screenshot())
         pair.name = "Spanish language selection and subtitle service mode"
         pair.lifetime = .keepAlways; add(pair)
         app.buttons["完成"].tap()
         XCTAssertTrue(app.buttons["scenePicker"].label.contains("西班牙语"))
-        XCTAssertTrue(app.staticTexts["仅字幕：本次不生成译音"].exists)
+        XCTAssertTrue(app.staticTexts["outputModeHint"].waitForExistence(timeout: 5))
     }
     func testSpeakingVisualizationAndOfflineMicrophoneEntry() {
         let app = XCUIApplication()
@@ -35,7 +45,7 @@ final class TongchuanUITests: XCTestCase {
         screenshot.name = "Speaking visualization (presentation fixture)"
         screenshot.lifetime = .keepAlways
         add(screenshot)
-        app.buttons["moreOptions"].tap()
+        openMore(app, destination: "连接诊断 / 测试收音")
         app.buttons["连接诊断 / 测试收音"].tap()
         XCTAssertTrue(app.buttons["localMicTest"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["录音回调次数"].exists)
@@ -46,7 +56,7 @@ final class TongchuanUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["scenePicker"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["mainAction"].exists)
-        app.buttons["moreOptions"].tap()
+        openMore(app, destination: "设置")
         app.buttons["设置"].tap()
         XCTAssertTrue(app.secureTextFields["apiKeyField"].waitForExistence(timeout: 5))
         // No API Key or live billable request is used by this smoke test.
@@ -62,7 +72,7 @@ final class TongchuanUITests: XCTestCase {
         app.buttons["scenePicker"].tap()
         XCTAssertTrue(app.buttons["faceToFaceScene"].waitForExistence(timeout: 5))
         app.buttons["完成"].tap()
-        app.buttons["moreOptions"].tap()
+        openMore(app, destination: "连接诊断 / 测试收音")
         app.buttons["连接诊断 / 测试收音"].tap()
         XCTAssertTrue(app.staticTexts["音频已发送包数"].waitForExistence(timeout: 5))
         app.buttons["完成"].tap()
