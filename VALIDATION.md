@@ -5,9 +5,11 @@
 用户提供的个人 Key 只经临时子进程环境变量传入，不含在源码、仓库、安装包或输出中。
 保留原有 VPN，通过既有系统代理连接官方 WSS；使用官方 Python demo 自带测试音频，不使用用户麦克风录音。
 发送 150 包、约12秒 PCM，接收成功码20000000、SessionStarted、原文与翻译字幕、34段译音（297560字节、9.29875秒PCM）及 SessionFinished。
-网关返回 SessionID 与客户端请求 UUID 不同；旧版按 UUID 过滤成功事件，造成不启动采集、最终等包超时。新版使用单会话专属 socket 与本地 generation 校验连接归属。
+握手补查：网关成功响应的 SessionID 长度为0，不能将“与请求UUID不同”认定为旧版过滤成功事件的原因；旧代码允许空SessionID。前述根因推断已纠正。新版仍按专属socket和本地generation校验归属，并将麦克风预热和首包验证提前到联网之前。45000081的设备侧具体原因仍待真机采集/发送计数验证。
 
 以上证明账号/权限/服务/PCM协议可用，不等于新版 iPhone 麦克风已通过真机测试。设备侧仍需用户安装后验证。
+
+反向测试使用上述官方样例产生的英文译音（非用户录音），设置en→zh：117包，接收双语字幕、28段中文译音（247468字节、7.733375秒PCM）及正常SessionFinished。
 
 ## 自动互译服务检查
 
@@ -15,7 +17,15 @@
 
 ## 新版构建
 
-0.2.0 build3，最低iOS15.0。云端编译和UI测试结果待本次流水线返回后补充。
+0.2.0 build3，最低iOS15.0。
+- 应用源码提交：b6ee9b31faa3587a9e9b7f1150a3b4221fdf40f3
+- 构建：https://github.com/a358435026/wai-/actions/runs/45794359909
+- Swift核心测试8项通过，iPhone真机目标Release archive和版本检查通过。
+- IPA：142365字节，ARM64/iPhoneOS，Info.plist和Mach-O最低系统均15.0，未签名，无embedded.mobileprovision。
+- IPA SHA256：53f8784db87b7917cbdeff8e24f1e18ffff91cda8b7f3f608babe24d99d98d13
+- Artifact ZIP SHA256：9e37ee07bb10807632a393e77944b49923e3199507e70021598bea907b60c1ea，与GitHub digest一致；内外ZIP CRC通过。
+- 二进制扫描不含用户提供的API Key。
+- 模拟器UI测试仍在运行；iOS15.4.1真机采集与外放需安装后验证。
 
 ---
 

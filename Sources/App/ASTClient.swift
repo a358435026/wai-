@@ -45,10 +45,9 @@ final class ASTClient {
                     }
                     self.receivedBytes += bytes.count
                     let response = try ASTResponse(data: bytes)
-                    // One session per socket. The gateway can assign a different response
-                    // SessionID (observed with AST v2); filtering by our request UUID drops
-                    // SessionStarted and prevents capture from ever starting. The model's
-                    // generation guard rejects responses from an obsolete connection.
+                    // One session per socket; the AST gateway can omit response SessionID.
+                    // The model generation guard owns connection identity. Do not rely on
+                    // a response UUID for routing this dedicated socket's events.
                     self.onResponse(response)
                 }
             } catch {
