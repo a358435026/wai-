@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var showCaptions = true
     @State private var showScenes = false
     @State private var showDiagnostics = false
+    @State private var showMore = false
     @State private var scene = "中译英对话"
     private var hasCaptions: Bool {
         model.source.captions.contains { !$0.text.isEmpty } || model.translation.captions.contains { !$0.text.isEmpty }
@@ -51,6 +52,12 @@ struct ContentView: View {
         .sheet(isPresented: $model.showSettings) { SettingsView(model: model) }
         .sheet(isPresented: $showScenes) { sceneSheet }
         .sheet(isPresented: $showDiagnostics) { diagnostics }
+        .confirmationDialog("更多操作", isPresented: $showMore, titleVisibility: .hidden) {
+            Button("设置") { model.showSettings = true }.disabled(model.active)
+            Button("连接诊断 / 测试收音") { showDiagnostics = true }
+            Button("清空字幕", role: .destructive) { model.clearCaptions() }.disabled(model.active)
+            Button("取消", role: .cancel) {}
+        }
         .tint(VoiceTheme.accent)
     }
     private var background: some View {
@@ -61,13 +68,10 @@ struct ContentView: View {
     }
     private var toolbar: some View {
         HStack {
-            Menu {
-                Button { model.showSettings = true } label: { Label("设置", systemImage: "slider.horizontal.3") }.disabled(model.active)
-                Button { model.clearCaptions() } label: { Label("清空字幕", systemImage: "trash") }.disabled(model.active)
-                Button { showDiagnostics = true } label: { Label("连接诊断 / 测试收音", systemImage: "waveform.path.ecg") }
-            } label: {
-                Image(systemName: "ellipsis").font(.title2).frame(width: 40, height: 44)
-            }.accessibilityLabel("更多选项")
+            Button { showMore = true } label: {
+                Image(systemName: "ellipsis").font(.title2).frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }.accessibilityLabel("更多选项").accessibilityIdentifier("moreOptions")
             Spacer(minLength: 4)
             Button { showScenes = true } label: {
                 HStack(spacing: 8) {

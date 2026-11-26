@@ -11,7 +11,7 @@ final class TongchuanUITests: XCTestCase {
         screenshot.name = "Speaking visualization (presentation fixture)"
         screenshot.lifetime = .keepAlways
         add(screenshot)
-        app.buttons["更多选项"].tap()
+        app.buttons["moreOptions"].tap()
         app.buttons["连接诊断 / 测试收音"].tap()
         XCTAssertTrue(app.buttons["localMicTest"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["录音回调次数"].exists)
@@ -21,7 +21,7 @@ final class TongchuanUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["scenePicker"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["mainAction"].exists)
-        app.buttons["更多选项"].tap()
+        app.buttons["moreOptions"].tap()
         app.buttons["设置"].tap()
         XCTAssertTrue(app.secureTextFields["apiKeyField"].waitForExistence(timeout: 5))
         // No API Key or live billable request is used by this smoke test.
@@ -37,7 +37,7 @@ final class TongchuanUITests: XCTestCase {
         app.buttons["scenePicker"].tap()
         XCTAssertTrue(app.buttons["faceToFaceScene"].waitForExistence(timeout: 5))
         app.buttons["完成"].tap()
-        app.buttons["更多选项"].tap()
+        app.buttons["moreOptions"].tap()
         app.buttons["连接诊断 / 测试收音"].tap()
         XCTAssertTrue(app.staticTexts["音频已发送包数"].waitForExistence(timeout: 5))
         app.buttons["完成"].tap()
