@@ -1,5 +1,5 @@
 id,screen,priority,feature,clone,note
-F01,S01,must,official S2S subtitles and audio,partial,live official Python probe passed; new iPhone package requires device retest
+F01,S01,must,official S2S subtitles and audio,yes,user confirmed Chinese and English subtitles plus English speech in real iPhone zh-en session
 F02,S01,must,full screen listening orb and pastel background,yes,native SwiftUI original artwork
 F03,S01,must,scrolling paired source and translated captions,yes,toggle hides display without stopping translation
 F04,S01,must,microphone mute and translated speech toggle,yes,silence packets preserve live session cadence
@@ -8,5 +8,5 @@ F06,S02,must,scene and direction selection,yes,default zh-en tested live; zhen o
 F07,S03,must,local Keychain settings,yes,no key embedded in source or IPA
 F08,S04,should,packet and playback diagnostics,yes,no credentials or recording in diagnostics
 F09,S01,could,camera and other app call capture,no,separate service and platform design required
-F10,S04,must,offline microphone probe with input queue diagnostics,partial,AudioQueue replacement awaits iOS15 device retest
-F11,S01,must,input and output driven fluid animation,partial,Canvas timeline and real mixer metering await render QA
+F10,S04,must,offline microphone probe with input queue diagnostics,yes,user confirmed increasing native callbacks and bytes on iPhone; speaking animates
+F11,S01,must,input and output driven fluid animation,yes,user confirmed input animation; native Canvas rendering and speaking presentation passed UI tests; actual output meter is wired to mixer tap
