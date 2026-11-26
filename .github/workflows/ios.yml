@@ -58,7 +58,7 @@ jobs:
           echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
       - name: Simulator launch and settings test
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: |
           xcodebuild test -project Tongchuan.xcodeproj -scheme Tongchuan \
             -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \

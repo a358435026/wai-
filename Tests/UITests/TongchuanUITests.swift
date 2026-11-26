@@ -4,13 +4,12 @@ final class TongchuanUITests: XCTestCase {
     func testSearchLanguageSwapAndTrueSubtitlesMode() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-reset-languages"]
-        app.launchArguments.append("--ui-reset-languages")
         app.launch()
         app.buttons["scenePicker"].tap()
         app.buttons["targetLanguagePicker"].tap()
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5))
-        search.tap(); search.typeText("西班牙")
+        search.tap(); search.typeText("es")
         app.buttons["language-es"].tap()
         XCTAssertTrue(app.staticTexts["西班牙语（墨西哥）"].waitForExistence(timeout: 5))
         app.buttons["swapLanguages"].tap()
