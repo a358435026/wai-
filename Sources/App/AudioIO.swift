@@ -1,54 +1,14 @@
 import AVFoundation
 import Foundation
 
-// Only the audio tap calls this object. All state is kept on that callback thread.
-private final class CaptureConverter: @unchecked Sendable {
-    private let converter: AVAudioConverter
-    private let outputFormat: AVAudioFormat
-    private var framer = PCMFramer()
-    private let emit: @Sendable (Data) -> Void
-    private let failure: @Sendable (String) -> Void
-    private var failed = false
-    private let lock = NSLock()
-
-    init(input: AVAudioFormat, emit: @escaping @Sendable (Data) -> Void,
-         failure: @escaping @Sendable (String) -> Void) throws {
-        guard input.sampleRate > 0, input.channelCount > 0,
-              let output = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000,
-                                         channels: 1, interleaved: true),
-              let converter = AVAudioConverter(from: input, to: output) else { throw AudioError.format }
-        self.converter = converter; outputFormat = output
-        self.emit = emit; self.failure = failure
-    }
-    func consume(_ input: AVAudioPCMBuffer) {
-        lock.lock(); defer { lock.unlock() }
-        guard !failed else { return }
-        let capacity = AVAudioFrameCount(ceil(Double(input.frameLength) * 16000 / input.format.sampleRate) + 32)
-        guard let output = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: capacity) else { return }
-        var used = false
-        var error: NSError?
-        let status = converter.convert(to: output, error: &error) { _, inputStatus in
-            if used { inputStatus.pointee = .noDataNow; return nil }
-            used = true; inputStatus.pointee = .haveData; return input
-        }
-        if error != nil || status == .error {
-            failed = true; failure("麦克风音频转换失败，请重新开始。"); return
-        }
-        guard output.frameLength > 0, let pointer = output.int16ChannelData?[0] else { return }
-        let data = Data(bytes: pointer, count: Int(output.frameLength) * 2)
-        framer.append(data).forEach(emit)
-    }
-    func finish() {
-        lock.lock(); defer { lock.unlock() }
-        if let remainder = framer.finish() { emit(remainder) }
-    }
-}
-
 enum AudioError: LocalizedError {
-    case format, playbackOverflow
+    case format, noInput, playbackOverflow
+    case queue(String, Int32)
     var errorDescription: String? {
         switch self {
-        case .format: return "当前音频设备无法使用，请断开异常音频设备后重试。"
+        case .format: return "无法建立音频格式，请重新开始或更换音频设备。"
+        case .noInput: return "系统没有可用的音频输入设备。请重新连接耳机或使用手机麦克风。"
+        case let .queue(operation, code): return "\(operation)失败（\(code)）。麦克风已授权不代表录音已启动，请查看连接诊断。"
         case .playbackOverflow: return "译音积压超过 20 秒，已停止同传。请检查网络后重新开始。"
         }
     }
@@ -58,9 +18,11 @@ enum AudioError: LocalizedError {
 final class AudioIO {
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
-    private var capture: CaptureConverter?
-    private var tapInstalled = false
+    private var capture: PCMInputQueue?
+    private var meterInstalled = false
     var onLevel: (@Sendable (Float) -> Void)?
+    var onOutputLevel: (@Sendable (Float) -> Void)?
+    var onInputBuffer: (@Sendable (Int) -> Void)?
     private var playbackGeneration = UUID()
     private var pendingPCM = Data()
     private(set) var pendingSamples = 0
@@ -72,34 +34,30 @@ final class AudioIO {
     func start(emit: @escaping @Sendable (Data) -> Void,
                failure: @escaping @Sendable (String) -> Void) throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .voiceChat,
+        try session.setCategory(.playAndRecord, mode: .default,
                                 options: [.defaultToSpeaker, .allowBluetooth])
         try session.setPreferredIOBufferDuration(0.02)
         try session.setActive(true)
+        guard session.isInputAvailable else { throw AudioError.noInput }
         engine.attach(player)
-        try engine.inputNode.setVoiceProcessingEnabled(true)
         engine.connect(player, to: engine.mainMixerNode, format: outputFormat)
-        let input = engine.inputNode.outputFormat(forBus: 0)
-        let converter = try CaptureConverter(input: input, emit: emit, failure: failure)
-        capture = converter
-        let reportLevel = onLevel
-        engine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: input) { buffer, _ in
-            if let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 {
-                var energy: Float = 0
-                for i in 0..<Int(buffer.frameLength) { energy += samples[i] * samples[i] }
-                reportLevel?(min(1, sqrt(energy / Float(buffer.frameLength)) * 8))
-            }
-            converter.consume(buffer)
+        let reportOutput = onOutputLevel
+        engine.mainMixerNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { buffer, _ in
+            guard let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else { reportOutput?(0); return }
+            var energy: Float = 0
+            for i in 0..<Int(buffer.frameLength) { let value = samples[i * buffer.stride]; energy += value * value }
+            reportOutput?(min(1, sqrt(energy / Float(buffer.frameLength)) * 6))
         }
-        tapInstalled = true
+        meterInstalled = true
         engine.prepare()
         try engine.start()
         player.play()
+        let queue = PCMInputQueue(emit: emit, meter: onLevel ?? { _ in },
+                                  received: onInputBuffer ?? { _ in }, failure: failure)
+        capture = queue
+        try queue.start()
     }
-    func stopCapture() {
-        if tapInstalled { engine.inputNode.removeTap(onBus: 0); tapInstalled = false }
-        capture?.finish(); capture = nil
-    }
+    func stopCapture() { capture?.stop(); capture = nil }
     func play(_ data: Data) throws {
         pendingPCM.append(data)
         let count = pendingPCM.count / 2
@@ -130,11 +88,18 @@ final class AudioIO {
         playbackGeneration = UUID()
         player.stop()
         pendingSamples = 0; pendingPCM.removeAll()
-        onPlaybackChanged?(false)
+        onPlaybackChanged?(false); onOutputLevel?(0)
     }
     func shutdown() {
         stopCapture(); clearPlayback(); engine.stop()
+        if meterInstalled { engine.mainMixerNode.removeTap(onBus: 0); meterInstalled = false }
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+    var isSpeaker: Bool {
+        AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .builtInSpeaker }
+    }
+    var inputName: String {
+        AVAudioSession.sharedInstance().currentRoute.inputs.map(\.portName).joined(separator: "、")
     }
     var routeName: String {
         AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portName).joined(separator: "、")

@@ -64,7 +64,7 @@ struct ContentView: View {
             Menu {
                 Button { model.showSettings = true } label: { Label("设置", systemImage: "slider.horizontal.3") }.disabled(model.active)
                 Button { model.clearCaptions() } label: { Label("清空字幕", systemImage: "trash") }.disabled(model.active)
-                Button { showDiagnostics = true } label: { Label("连接诊断", systemImage: "waveform.path.ecg") }
+                Button { showDiagnostics = true } label: { Label("连接诊断 / 测试收音", systemImage: "waveform.path.ecg") }
             } label: {
                 Image(systemName: "ellipsis").font(.title2).frame(width: 40, height: 44)
             }.accessibilityLabel("更多选项")
@@ -86,12 +86,12 @@ struct ContentView: View {
     private func listeningArea(height: CGFloat) -> some View {
         VStack(spacing: VoiceTheme.spacing) {
             Spacer(minLength: 0)
-            VoiceOrb(level: model.inputLevel, active: model.phase == .live, playing: model.playing)
+            VoiceOrb(level: model.inputLevel, output: model.outputLevel, active: model.phase == .live, playing: model.playing)
                 .frame(width: orbSide(height), height: orbSide(height))
                 .accessibilityLabel(model.active ? "语音会话进行中" : "同声传译待机")
             VStack(spacing: 10) {
-                Text("随声同传").font(.title2.weight(.semibold))
-                Text(model.directions[model.direction]).font(.subheadline).foregroundColor(VoiceTheme.muted)
+                Text(model.localTest ? "本机麦克风测试" : "随声同传").font(.title2.weight(.semibold))
+                Text(model.localTest ? "不联网，不消耗同传额度" : model.directions[model.direction]).font(.subheadline).foregroundColor(VoiceTheme.muted)
             }
             Spacer(minLength: 0)
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -128,24 +128,28 @@ struct ContentView: View {
                 HStack(alignment: .center, spacing: 5) {
                     ForEach(0..<5) { i in
                         Capsule().fill(VoiceTheme.accent.opacity(0.65))
-                            .frame(width: 4, height: CGFloat(8 + model.inputLevel * Float(i % 3 + 1) * 24))
+                            .frame(width: 4, height: CGFloat(8 + (model.playing ? model.outputLevel : model.inputLevel) * Float(i % 3 + 1) * 24))
                     }
-                }.frame(height: 36).animation(.easeOut(duration: 0.12), value: model.inputLevel)
+                }.frame(height: 36).animation(.easeOut(duration: 0.12), value: model.inputLevel + model.outputLevel)
             }
             Button {
                 if model.playing { model.interruptPlayback() }
             } label: {
                 Text(statusTitle).font(.headline).foregroundColor(VoiceTheme.muted)
             }.disabled(!model.playing).accessibilityIdentifier("voiceStatus")
-            Text(model.active ? model.route : "点击下方开始，音频将发送至火山引擎")
+            Text(model.localTest ? "正在本机收音 · 点击下方结束" : (model.active ? model.route : "点击波形开始 · 更多中可测试本机麦克风"))
                 .font(.caption).foregroundColor(VoiceTheme.muted).multilineTextAlignment(.center)
             if model.micMuted && model.active {
                 Text("麦克风已静音，会话仍可能计费").font(.caption).foregroundColor(VoiceTheme.muted)
+            }
+            if model.capturePausedForSpeaker {
+                Text("外放播报中 · 暂停上传收音防止回声").font(.caption).foregroundColor(VoiceTheme.muted)
             }
         }.frame(minHeight: 74)
     }
     private var statusTitle: String {
         if model.playing { return "正在播报 · 点击打断" }
+        if model.localTest && model.phase == .live { return "对着手机说话，观察声音变化" }
         if model.phase == .live { return model.micMuted ? "麦克风已静音" : "请开始说话" }
         if !model.keySaved { return "先配置 API Key" }
         return model.status
@@ -210,10 +214,21 @@ struct ContentView: View {
             Form {
                 Section("当前会话") {
                     LabeledContentCompat("状态", model.status)
+                    LabeledContentCompat("麦克风权限", model.microphonePermission)
+                    LabeledContentCompat("录音方式", "原生 PCM 录音队列")
+                    LabeledContentCompat("输入设备", model.inputDevice)
+                    LabeledContentCompat("录音回调次数", String(model.inputBuffers))
+                    LabeledContentCompat("收到麦克风字节", String(model.inputBytes))
                     LabeledContentCompat("麦克风采集包数", String(model.capturedPackets))
                     LabeledContentCompat("音频已发送包数", String(model.sentPackets))
                     LabeledContentCompat("收到译音字节", String(model.receivedAudioBytes))
                     LabeledContentCompat("播放设备", model.route)
+                }
+                Section {
+                    Button("测试本机麦克风（不联网）") { showDiagnostics = false; model.testMicrophone() }
+                        .disabled(model.active).accessibilityIdentifier("localMicTest")
+                    Text("先验证手机收音，再连接翻译服务。外放使用轮流收说避免回声；戴耳机可同时收听和说话。")
+                        .font(.footnote).foregroundColor(.secondary)
                 }
                 Section { Text("每个完整音频包约 80 毫秒。诊断不含 API Key 或录音。当前版本需保持应用在前台。") }
             }.navigationTitle("连接诊断").navigationBarTitleDisplayMode(.inline)
@@ -231,23 +246,57 @@ private struct LabeledContentCompat: View {
 
 private struct VoiceOrb: View {
     let level: Float
+    let output: Float
     let active: Bool
     let playing: Bool
-    @State private var breathe = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
-        ZStack {
-            Circle().fill(VoiceTheme.lilac.opacity(0.25)).blur(radius: 24)
-                .scaleEffect(breathe ? 1.13 : 0.93)
-            Circle().fill(LinearGradient(colors: [VoiceTheme.rose, VoiceTheme.lilac, VoiceTheme.sky],
-                                        startPoint: .bottomLeading, endPoint: .topTrailing))
-            Circle().fill(RadialGradient(colors: [VoiceTheme.accent.opacity(0.50), .clear],
-                                        center: breathe ? .topTrailing : .topLeading, startRadius: 0, endRadius: 220))
-                .blur(radius: 18).clipShape(Circle())
-            Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1)
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { timeline in
+            Canvas { context, size in
+                let time = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
+                let strength = Double(playing ? output : (active ? level : 0))
+                let side = min(size.width, size.height)
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                let shell = blob(center: center, radius: side * 0.39, time: time, strength: strength)
+                var glow = context
+                glow.addFilter(.blur(radius: side * 0.08))
+                glow.opacity = 0.28 + strength * 0.25
+                glow.fill(blob(center: center, radius: side * 0.43, time: time, strength: strength),
+                          with: .color(playing ? VoiceTheme.sky : VoiceTheme.lilac))
+                context.fill(shell, with: .linearGradient(Gradient(colors: [VoiceTheme.rose, VoiceTheme.lilac, VoiceTheme.sky]),
+                    startPoint: CGPoint(x: 0, y: side), endPoint: CGPoint(x: side, y: 0)))
+                var liquid = context
+                liquid.clip(to: shell)
+                liquid.addFilter(.blur(radius: side * 0.09))
+                let colors = playing ? [VoiceTheme.sky, VoiceTheme.mint, VoiceTheme.lilac] : [VoiceTheme.lilac, VoiceTheme.rose, VoiceTheme.sky]
+                for index in 0..<3 {
+                    let phase = time * (playing ? 0.9 : 0.5) + Double(index) * 2.1
+                    let point = CGPoint(x: center.x + cos(phase) * side * 0.21,
+                                        y: center.y + sin(phase * 1.2) * side * 0.22)
+                    let diameter = side * (0.64 + strength * 0.15)
+                    liquid.fill(Path(ellipseIn: CGRect(x: point.x - diameter/2, y: point.y - diameter/2,
+                                                      width: diameter, height: diameter)), with: .color(colors[index]))
+                }
+                context.stroke(shell, with: .color(.white.opacity(0.38)), lineWidth: side * 0.004)
+                if active || playing {
+                    context.stroke(blob(center: center, radius: side * 0.45, time: time + 1, strength: strength),
+                        with: .color((playing ? VoiceTheme.accent : VoiceTheme.lilac).opacity(0.2 + strength * 0.3)),
+                        lineWidth: side * 0.006)
+                }
+            }
+        }.accessibilityIdentifier("voiceOrb")
+    }
+    private func blob(center: CGPoint, radius: CGFloat, time: Double, strength: Double) -> Path {
+        var path = Path()
+        for index in 0..<128 {
+            let angle = Double(index) / 128 * .pi * 2
+            let movement = sin(angle * 3 + time * 1.5) * 0.025 + cos(angle * 5 - time * 1.1) * 0.016
+            let wave = sin(angle * 7 + time * 4) * strength * 0.04
+            let r = radius * (1 + CGFloat(movement + wave + strength * 0.12))
+            let point = CGPoint(x: center.x + CGFloat(cos(angle)) * r, y: center.y + CGFloat(sin(angle)) * r)
+            if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
         }
-        .scaleEffect(active ? 1 + CGFloat(level) * 0.08 : 1)
-        .rotationEffect(.degrees(breathe ? 12 : -12))
-        .animation(.easeInOut(duration: 0.18), value: level)
-        .onAppear { withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) { breathe = true } }
+        path.closeSubpath()
+        return path
     }
 }

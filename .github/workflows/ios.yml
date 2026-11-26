@@ -36,7 +36,7 @@ jobs:
       - name: Verify real iPhone binary supports iOS 15.4.1
         run: |
           python3 tools/verify_ipa.py build/Tongchuan-iOS15-unsigned.ipa \
-            --max-minimum-ios 15.4.1 --expected-version 0.2.0 | tee build/ipa-verification.json
+            --max-minimum-ios 15.4.1 --expected-version 0.2.1 | tee build/ipa-verification.json
       - name: Upload verified iPhone IPA
         uses: actions/upload-artifact@v4
         with:
@@ -52,10 +52,13 @@ jobs:
           SDK_VERSION=$(xcrun --sdk iphonesimulator --show-sdk-version)
           python3 tools/select_simulator.py build/simulators.json "$SDK_VERSION" >> "$GITHUB_ENV"
       - name: Boot selected simulator
-        timeout-minutes: 3
-        run: xcrun simctl bootstatus "$SIMULATOR_ID" -b
+        timeout-minutes: 10
+        run: |
+          SIMULATOR_ID=$(xcrun simctl create Tongchuan-CI com.apple.CoreSimulator.SimDeviceType.iPhone-16 "$SIMULATOR_RUNTIME")
+          echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
       - name: Simulator launch and settings test
-        timeout-minutes: 5
+        timeout-minutes: 8
         run: |
           xcodebuild test -project Tongchuan.xcodeproj -scheme Tongchuan \
             -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \

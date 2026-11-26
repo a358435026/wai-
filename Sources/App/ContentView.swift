@@ -29,9 +29,14 @@ struct SettingsView: View {
                 } header: { Text("个人自用凭据") } footer: {
                     Text("Key 仅存入本机钥匙串，不写入项目、日志或普通设置。请使用已开通同声传译服务的 Key，调用按火山引擎规则计费。")
                 }
+                Section("本机音频测试") {
+                    Button("测试麦克风（不联网）") { dismiss(); model.testMicrophone() }.disabled(model.active)
+                    Text("不需要 API Key，也不消耗服务额度。若已授权仍无法收音，可在连接诊断查看队列回调和设备信息。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("语音播放") {
                     Toggle("自动播放译音", isOn: $model.playbackEnabled)
-                    Text("采用官方译音，默认跟随输入说话人的音色。")
+                    Text("采用官方译音。外放时轮流收说以避免回声；戴耳机可同时收听与说话。")
                         .font(.footnote).foregroundStyle(.secondary)
                     Text("首版需保持应用在前台。进入后台或音频被中断时会结束连接；会话运行期间屏幕保持唤醒。")
                         .font(.footnote).foregroundStyle(.secondary)

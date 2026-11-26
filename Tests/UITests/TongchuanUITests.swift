@@ -1,6 +1,21 @@
 import XCTest
 
 final class TongchuanUITests: XCTestCase {
+    func testSpeakingVisualizationAndOfflineMicrophoneEntry() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-speaking"]
+        app.launch()
+        XCTAssertTrue(app.buttons["voiceStatus"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["正在播报 · 点击打断"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Speaking visualization (presentation fixture)"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        app.buttons["更多选项"].tap()
+        app.buttons["连接诊断 / 测试收音"].tap()
+        XCTAssertTrue(app.buttons["localMicTest"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["录音回调次数"].exists)
+    }
     func testLaunchAndCredentialSetup() throws {
         let app = XCUIApplication()
         app.launch()
@@ -23,7 +38,7 @@ final class TongchuanUITests: XCTestCase {
         XCTAssertTrue(app.buttons["faceToFaceScene"].waitForExistence(timeout: 5))
         app.buttons["完成"].tap()
         app.buttons["更多选项"].tap()
-        app.buttons["连接诊断"].tap()
+        app.buttons["连接诊断 / 测试收音"].tap()
         XCTAssertTrue(app.staticTexts["音频已发送包数"].waitForExistence(timeout: 5))
         app.buttons["完成"].tap()
     }

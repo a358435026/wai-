@@ -2,6 +2,21 @@ import XCTest
 @testable import TongchuanCore
 
 final class ASTProtocolTests: XCTestCase {
+    func testMicrophoneLevelUsesSignedLittleEndianPCMAndIgnoresIncompleteSample() {
+        XCTAssertEqual(PCMLevel.normalized(Data(repeating: 0, count: 2560)), 0)
+        XCTAssertEqual(PCMLevel.normalized(Data([0, 64, 0, 192])), 1)
+        XCTAssertEqual(PCMLevel.normalized(Data([0, 8, 0, 248])), 0.375, accuracy: 0.0001)
+        XCTAssertEqual(PCMLevel.normalized(Data([0, 8, 0, 248, 255])), 0.375, accuracy: 0.0001)
+    }
+    func testRecordingBuffersStayFramedAt80MillisecondsEvenWhenCallbackIsPartial() {
+        var framer = PCMFramer()
+        XCTAssertTrue(framer.append(Data(repeating: 0, count: 1280)).isEmpty)
+        let second = framer.append(Data(repeating: 1, count: 1280))
+        XCTAssertEqual(second.count, 1)
+        XCTAssertEqual(second[0].count, 2560)
+        XCTAssertEqual(second[0].prefix(1280), Data(repeating: 0, count: 1280))
+        XCTAssertEqual(second[0].suffix(1280), Data(repeating: 1, count: 1280))
+    }
     private func fixture(_ name: String) throws -> Data {
         let url = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: "hex", subdirectory: "Fixtures"))
         let hex = try String(contentsOf: url).trimmingCharacters(in: .whitespacesAndNewlines)

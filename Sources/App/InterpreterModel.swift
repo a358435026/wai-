@@ -14,6 +14,12 @@ final class InterpreterModel: ObservableObject {
     @Published private(set) var playing = false
     @Published private(set) var route = "扬声器 / 耳机"
     @Published private(set) var inputLevel: Float = 0
+    @Published private(set) var outputLevel: Float = 0
+    @Published private(set) var inputBuffers = 0
+    @Published private(set) var inputBytes = 0
+    @Published private(set) var inputDevice = "尚未启动"
+    @Published private(set) var localTest = false
+    @Published private(set) var capturePausedForSpeaker = false
     @Published private(set) var capturedPackets = 0
     @Published private(set) var sentPackets = 0
     @Published private(set) var receivedAudioBytes = 0
@@ -34,6 +40,14 @@ final class InterpreterModel: ObservableObject {
     private var captureWatchdog: Task<Void, Never>?
     private var lastCapture = Date()
     private var skipCurrentSpeech = false
+    private var speakerHoldUntil = Date.distantPast
+    var microphonePermission: String {
+        switch AVAudioSession.sharedInstance().recordPermission {
+        case .granted: return "已授权"
+        case .denied: return "未授权"
+        default: return "尚未询问"
+        }
+    }
     private var observers: [NSObjectProtocol] = []
     private var generation = UUID()
     let directions = ["中文 → English", "English → 中文", "中英自动互译（测试）"]
@@ -48,6 +62,9 @@ final class InterpreterModel: ObservableObject {
 
     init() {
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-speaking") {
+            playing = true; outputLevel = 0.7
+        }
         if ProcessInfo.processInfo.arguments.contains("--ui-captions") {
             source.append("您好，我想了解这款电动车的续航和交货时间。"); source.end()
             translation.append("Hello, I would like to know the range and delivery time of this electric bike."); translation.end()
@@ -93,11 +110,47 @@ final class InterpreterModel: ObservableObject {
     func clearCaptions() { source = CaptionLane(); translation = CaptionLane(); errorMessage = nil }
     func interruptPlayback() { skipCurrentSpeech = true; audio?.clearPlayback() }
 
+    // This test uses the exact recording path as a real session, without opening
+    // a WebSocket or needing a key. It remains active until the user stops it.
+    func testMicrophone() {
+        guard !active else { return }
+        resetAudioStats(); clearCaptions(); localTest = true
+        phase = .connecting; status = "正在启动本机麦克风测试"
+        let run = UUID(); generation = run
+        connectionTask = Task { [weak self] in
+            guard let self else { return }
+            let allowed = await withCheckedContinuation { continuation in
+                AVAudioSession.sharedInstance().requestRecordPermission { continuation.resume(returning: $0) }
+            }
+            guard self.generation == run else { return }
+            guard allowed else { self.fail("麦克风权限被拒绝。请在 iPhone 设置中允许随声同传使用麦克风。"); return }
+            self.prepareAudio()
+            guard self.generation == run else { return }
+            for _ in 0..<60 {
+                if self.capturedPackets > 0 { break }
+                do { try await Task.sleep(nanoseconds: 100_000_000) } catch { return }
+                guard self.generation == run else { return }
+            }
+            guard self.capturedPackets > 0 else { self.fail(self.captureFailureDescription); return }
+            self.phase = .live; self.status = "本机收音测试中 · 不联网"
+            UIApplication.shared.isIdleTimerDisabled = true
+        }
+    }
+    private var captureFailureDescription: String {
+        "麦克风\(microphonePermission)，但录音队列\(inputBuffers == 0 ? "没有返回缓冲" : "没有产生有效 PCM 包")。输入：\(inputDevice)；回调 \(inputBuffers) 次，\(inputBytes) 字节。请打开连接诊断查看。"
+    }
+    private func resetAudioStats() {
+        capturedPackets = 0; sentPackets = 0; receivedAudioBytes = 0
+        inputBuffers = 0; inputBytes = 0; inputLevel = 0; outputLevel = 0
+        inputDevice = "尚未启动"; capturePausedForSpeaker = false
+        speakerHoldUntil = .distantPast
+    }
+
     func start() {
         guard phase == .idle else { return }
         guard let key = KeychainStore.read(), !key.isEmpty else { showSettings = true; return }
         clearCaptions(); micMuted = false
-        capturedPackets = 0; sentPackets = 0; receivedAudioBytes = 0; inputLevel = 0; skipCurrentSpeech = false
+        resetAudioStats(); localTest = false; skipCurrentSpeech = false
         phase = .connecting; status = "正在申请麦克风并连接"
         let run = UUID(); generation = run
         connectionTask = Task { [weak self] in
@@ -115,13 +168,13 @@ final class InterpreterModel: ObservableObject {
             self.prepareAudio()
             guard self.generation == run else { return }
             // Warm up voice processing before asking the server to wait for packets.
-            for _ in 0..<40 {
+            for _ in 0..<60 {
                 if self.capturedPackets > 0 { break }
                 do { try await Task.sleep(nanoseconds: 100_000_000) } catch { return }
                 guard self.generation == run else { return }
             }
             guard self.capturedPackets > 0 else {
-                self.fail("麦克风未输出音频。请检查权限和音频设备，然后重新开始。"); return
+                self.fail(self.captureFailureDescription); return
             }
             self.status = "正在连接火山引擎"
             let client = ASTClient(onResponse: { [weak self] response in
@@ -177,11 +230,28 @@ final class InterpreterModel: ObservableObject {
         let continuation = streamContinuation!
         let audio = AudioIO()
         self.audio = audio
-        audio.onPlaybackChanged = { [weak self] value in self?.playing = value }
+        audio.onPlaybackChanged = { [weak self] value in
+            guard let self else { return }
+            self.playing = value
+            if self.audio?.isSpeaker == true { self.speakerHoldUntil = value ? .distantFuture : Date().addingTimeInterval(0.35) }
+            if !value { self.outputLevel = 0 }
+        }
         audio.onLevel = { [weak self] value in
             Task { @MainActor in
                 guard let self, self.generation == run else { return }
-                self.inputLevel = self.micMuted ? 0 : value
+                self.inputLevel = self.micMuted ? 0 : max(value, self.inputLevel * 0.55)
+            }
+        }
+        audio.onOutputLevel = { [weak self] value in
+            Task { @MainActor in
+                guard let self, self.generation == run else { return }
+                self.outputLevel = self.playing ? max(value, self.outputLevel * 0.65) : 0
+            }
+        }
+        audio.onInputBuffer = { [weak self] bytes in
+            Task { @MainActor in
+                guard let self, self.generation == run else { return }
+                self.inputBuffers += 1; self.inputBytes += bytes
             }
         }
         do {
@@ -199,6 +269,7 @@ final class InterpreterModel: ObservableObject {
                 }
             })
             route = audio.routeName
+            inputDevice = audio.inputName.isEmpty ? "系统未提供输入路由" : audio.inputName
             sendTask = Task { [weak self] in
                 do {
                     for await data in stream {
@@ -206,7 +277,8 @@ final class InterpreterModel: ObservableObject {
                         self.capturedPackets += 1
                         self.lastCapture = Date()
                         guard self.phase == .live || self.phase == .finishing, let client = self.client else { continue }
-                        let packet = self.micMuted ? Data(repeating: 0, count: data.count) : data
+                        self.capturePausedForSpeaker = audio.isSpeaker && Date() < self.speakerHoldUntil
+                        let packet = (self.micMuted || self.capturePausedForSpeaker) ? Data(repeating: 0, count: data.count) : data
                         try await client.sendAudio(packet)
                         self.sentPackets += 1
                     }
@@ -229,6 +301,7 @@ final class InterpreterModel: ObservableObject {
 
     func stop() {
         guard phase != .idle else { return }
+        if localTest { cleanup(); status = "本机收音测试已结束"; return }
         if phase == .connecting { cleanup(); status = "已取消连接"; return }
         guard phase == .live else { return }
         phase = .finishing; status = "正在完成最后一句"
@@ -274,7 +347,8 @@ final class InterpreterModel: ObservableObject {
         streamContinuation?.finish(); streamContinuation = nil
         sendTask?.cancel(); sendTask = nil
         client?.disconnect(); client = nil
-        playing = false; phase = .idle; micMuted = false; inputLevel = 0
+        playing = false; phase = .idle; micMuted = false; inputLevel = 0; outputLevel = 0
+        capturePausedForSpeaker = false; localTest = false
         UIApplication.shared.isIdleTimerDisabled = false
     }
     private func describe(_ error: Error) -> String {
