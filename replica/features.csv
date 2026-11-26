@@ -1,0 +1,10 @@
+id,screen,priority,feature,clone,note
+F01,S01,must,official S2S subtitles and audio,partial,live official Python probe passed; new iPhone package requires device retest
+F02,S01,must,full screen listening orb and pastel background,yes,native SwiftUI original artwork
+F03,S01,must,scrolling paired source and translated captions,yes,toggle hides display without stopping translation
+F04,S01,must,microphone mute and translated speech toggle,yes,silence packets preserve live session cadence
+F05,S01,must,finish and local playback interrupt,yes,interrupt suppresses remainder of current TTS sentence
+F06,S02,must,scene and direction selection,yes,face to face uses zhen reversal; meeting uses selected direction
+F07,S03,must,local Keychain settings,yes,no key embedded in source or IPA
+F08,S04,should,packet and playback diagnostics,yes,no credentials or recording in diagnostics
+F09,S01,could,camera and other app call capture,no,separate service and platform design required

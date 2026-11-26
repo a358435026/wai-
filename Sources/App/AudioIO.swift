@@ -60,6 +60,7 @@ final class AudioIO {
     private let player = AVAudioPlayerNode()
     private var capture: CaptureConverter?
     private var tapInstalled = false
+    var onLevel: (@Sendable (Float) -> Void)?
     private var playbackGeneration = UUID()
     private var pendingPCM = Data()
     private(set) var pendingSamples = 0
@@ -81,7 +82,13 @@ final class AudioIO {
         let input = engine.inputNode.outputFormat(forBus: 0)
         let converter = try CaptureConverter(input: input, emit: emit, failure: failure)
         capture = converter
+        let reportLevel = onLevel
         engine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: input) { buffer, _ in
+            if let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 {
+                var energy: Float = 0
+                for i in 0..<Int(buffer.frameLength) { energy += samples[i] * samples[i] }
+                reportLevel?(min(1, sqrt(energy / Float(buffer.frameLength)) * 8))
+            }
             converter.consume(buffer)
         }
         tapInstalled = true
