@@ -36,7 +36,7 @@ jobs:
       - name: Verify real iPhone binary supports iOS 15.4.1
         run: |
           python3 tools/verify_ipa.py build/Tongchuan-iOS15-unsigned.ipa \
-            --max-minimum-ios 15.4.1 --expected-version 0.3.0 | tee build/ipa-verification.json
+            --max-minimum-ios 15.4.1 --expected-version 0.3.1 | tee build/ipa-verification.json
       - name: Upload verified iPhone IPA
         uses: actions/upload-artifact@v4
         with:

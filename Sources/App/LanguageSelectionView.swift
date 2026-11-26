@@ -7,7 +7,6 @@ struct LanguageSelectionView: View {
     let showSpeechSupport: Bool
     let select: (String) -> Void
     @State private var query = ""
-    @Environment(\.dismiss) private var dismiss
     private var matches: [ASTLanguage] {
         let value = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return value.isEmpty ? options : options.filter {
@@ -19,7 +18,7 @@ struct LanguageSelectionView: View {
             if matches.isEmpty { Text("未找到该语言，请尝试语种名称或代码。").foregroundColor(.secondary) }
             ForEach(matches) { language in
                 Button {
-                    select(language.id); dismiss()
+                    select(language.id)
                 } label: {
                     HStack {
                         VStack(alignment: .leading) {

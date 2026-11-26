@@ -21,6 +21,8 @@ struct ContentView: View {
     @StateObject private var model = InterpreterModel()
     @State private var showCaptions = true
     @State private var showScenes = false
+    @State private var sourcePickerOpen = false
+    @State private var targetPickerOpen = false
     @State private var showDiagnostics = false
     @State private var showMore = false
     private var hasCaptions: Bool {
@@ -196,15 +198,19 @@ struct ContentView: View {
         NavigationView {
             Form {
                 Section("翻译语言") {
-                    NavigationLink {
+                    NavigationLink(isActive: $sourcePickerOpen) {
                         LanguageSelectionView(title: "源语言", options: ASTLanguages.sources,
-                            selected: model.sourceCode, showSpeechSupport: false, select: model.selectSource)
+                            selected: model.sourceCode, showSpeechSupport: false) { code in
+                                model.selectSource(code); sourcePickerOpen = false
+                            }
                     } label: {
                         HStack { Text("源语言"); Spacer(); Text(model.sourceLanguage.name).foregroundColor(.secondary) }
                     }.accessibilityIdentifier("sourceLanguagePicker")
-                    NavigationLink {
+                    NavigationLink(isActive: $targetPickerOpen) {
                         LanguageSelectionView(title: "目标语言", options: model.availableTargets,
-                            selected: model.targetCode, showSpeechSupport: true, select: model.selectTarget)
+                            selected: model.targetCode, showSpeechSupport: true) { code in
+                                model.selectTarget(code); targetPickerOpen = false
+                            }
                     } label: {
                         HStack { Text("目标语言"); Spacer(); Text(model.targetLanguage.name).foregroundColor(.secondary) }
                     }.accessibilityIdentifier("targetLanguagePicker")

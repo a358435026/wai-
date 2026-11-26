@@ -11,6 +11,7 @@ final class TongchuanUITests: XCTestCase {
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap(); search.typeText("es")
         app.buttons["language-es"].tap()
+        XCTAssertTrue(app.buttons["swapLanguages"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["西班牙语（墨西哥）"].waitForExistence(timeout: 5))
         app.buttons["swapLanguages"].tap()
         XCTAssertTrue(app.staticTexts["中文（普通话）"].exists)
