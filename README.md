@@ -2,6 +2,12 @@
 
 SwiftUI + AudioQueue + AVAudioEngine，支持火山AST与阿里百炼Qwen 3.8实时同传。无需豆包 App、越狱或注入。
 
+## 0.6.1 火山连接检查与内置通用外贸词库
+
+可按当前翻译方向、输出模式和词表测试连接。测试并保存会先验证新 Key，再更新钥匙串。连接中显示当前步骤，可取消。首选服务没有可读的 Key 时，自动备用会检查是否有已配置且兼容的另一家。
+
+内置 78 组中英葡西词汇，参考 [ICC Incoterms 2020](https://iccwbo.org/business-solutions/incoterms-rules/incoterms-2020/)、[ITA 常用出口单证](https://www.trade.gov/common-export-documents)和 [ITA 贸易融资指南](https://www.trade.gov/report/trade-finance-guide)整理，另含电动车词汇。自定义词优先，每次会话最多发送 100 条。
+
 ## 0.6.0 连接恢复与外贸术语
 
 新增可识别HTTP鉴权错误、每家独立的无录音连接测试、受语种与模式约束的单次自动备用，以及可编辑/导入的术语词表。仅有兼容且配置齐全的备用时才缩短连接等待或因译文迟滞触发切换；不并行上传、不回放旧录音。
