@@ -34,7 +34,11 @@ enum KeychainStore {
     enum StoreError: LocalizedError {
         case status(OSStatus)
         var errorDescription: String? {
-            switch self { case .status(let code): return "钥匙串操作失败（\(code)），请解锁手机后重试。" }
+            switch self {
+            case .status(let code):
+                if code == -34018 { return "安装签名缺少钥匙串权限（-34018），请用TrollStore重新安装或修复签名后重试。" }
+                return "钥匙串操作失败（\(code)），请解锁手机后重试。"
+            }
         }
     }
 }
