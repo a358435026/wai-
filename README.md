@@ -1,6 +1,19 @@
 # 随声同传 · iPhone 独立客户端
 
-SwiftUI + AVAudioEngine + 火山引擎官方 AST S2S。无需豆包 App、越狱或注入。
+SwiftUI + AudioQueue + AVAudioEngine，支持火山AST与阿里百炼Qwen 3.8实时同传。无需豆包 App、越狱或注入。
+
+## 0.4.0 百炼实时同传
+
+最终build11：25核心与5原生UI用例通过；保存入口保持在顶部，保存失败弹窗显示原因。模拟器签名/钥匙串问题已修复，不以假存储代替验证。新版iPhone实机仍待用户安装验收。
+
+- 设置中可切换火山引擎与阿里百炼；各自Key使用独立Keychain service，不覆盖旧版火山Key。服务商、语言和非凭据API Host保存在本机偏好。
+- 百炼使用业务空间专属官方WSS与qwen3.8-livetranslate-flash-realtime；等待session.created后配置、session.updated后上传PCM，停止发送session.finish，等session.finished并播完尾句。
+- 百炼源语言自动识别，译入语言固定为用户选择，不能把自动识别当作自动双向换译入语种。提供60译入语种、29语音目标，其余真正仅字幕。
+- 输入保持16kHz/mono/PCM16 AudioQueue路径；百炼译音24kHz，火山译音16kHz，播放队列和20秒积压限额随提供商采样率调整。
+- 百炼字幕按item_id累计，最终整句覆盖增量，避免重复；最多保留100条显示字幕。两家均不保存麦克风录音，不自动跨平台切换计费。
+- 新版没有内置任何个人Key或业务空间地址。需在设置选择阿里百炼并填写自己的API Host与完整Key。个人凭据仅在本机钥匙串中；此设计面向个人自用，公开分发应改为服务端临时凭据方案。
+- 仍支持iOS15.0及以上；既有外放轮流收说/耳机双工行为不变，未引入AOQ或宣称实现外放全双工回声消除。
+- 2026-11-27用户授权电脑短测：已返回中文原文、英文译文、33音频分片、460800字节PCM24k（9.6秒）、正常结束。它不代表新iOS客户端已完成真机验收。构建结果见VALIDATION.md。
 
 ## 0.3.1 多语种与仅字幕
 
@@ -95,6 +108,10 @@ CI 会同时检查 Info.plist 和 Mach-O 内的最低系统版本，确保不超
 
 ## 官方资料
 
+- https://help.aliyun.com/zh/model-studio/livetranslate-realtime-websocket-access
+- https://help.aliyun.com/zh/model-studio/live-translator-client-events
+- https://help.aliyun.com/zh/model-studio/live-translator-server-events
+
 - https://docs.volcengine.com/docs/doubao-voice/simultaneous-interpretation?lang=zh
 - https://docs.volcengine.com/docs/doubao-voice/simultaneous-interpretation-1?lang=zh
 - https://developer.apple.com/documentation/avfaudio/avaudioionode/setvoiceprocessingenabled(_:)
@@ -104,7 +121,7 @@ CI 会同时检查 Info.plist 和 Mach-O 内的最低系统版本，确保不超
 
 ## 其他供应商接入评估（2026-11-26）
 
-当前安装包仍使用火山引擎官方AST，没有将DeepSeek Key当成火山Key使用，也未加入伪装可用的供应商选项。
+0.4.0新增百炼接入；DeepSeek未接入，不可将其Key填入火山或百炼字段。以下费用为文档估算，未做长期稳定性排名。
 
 - 阿里云百炼Qwen3.8-LiveTranslate-Flash-Realtime：北京地域音频输入40元/百万Token、输出音频160元/百万Token、文字输出100元/百万Token；音频每秒输入7Token、输出12.5Token。输入/输出各一小时的音频费用合计8.208元，文字另计。该值是按官网换算的估算，不代表已在用户网络验证质量、可用性或延迟。
 - DeepSeek官方新增ASR/TTS工具接口：ASR目前非流式，一次最长120秒，更适合按句翻译；默认TTS支持10种语言，未列西班牙语/法语/德语/葡萄牙语。可以组合ASR→文字翻译→TTS，但不是替换当前WebSocket地址或Key即可。

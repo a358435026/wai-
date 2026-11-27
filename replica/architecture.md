@@ -13,3 +13,6 @@ Playback interruption discards the current sentence locally until the next TTS s
 
 
 0.3.0 adds a typed language capability catalog and validates source/target combinations before starting a session. Selected languages and subtitle preference are non-secret UserDefaults values. Unsupported default speech targets request true S2T without target_audio, rather than generating chargeable audio and merely muting playback. Explicit subtitle-only mode does the same. AudioQueue and playback paths are unchanged from the phone-confirmed 0.2.1 build.
+
+
+0.4.0: TranslationClient abstracts the existing AST client and the new official Qwen3.8 WSS client. BailianDecoder normalizes JSON/base64/caption item IDs into the existing presentation events. Its full caption completions replace accumulated deltas, with bounded per-item state. AudioIO accepts provider output rate while PCMInputQueue still captures16k PCM. Keychain services are isolated; no personal host or key is embedded. Qwen3.8 source recognition is automatic; its60 target catalog and29 spoken targets are separate from AST language restrictions. No automatic provider fallback or surprise cross-provider billing.

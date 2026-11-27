@@ -6,7 +6,7 @@
 ## 已安装 TrollStore / 越狱设备
 
 用户已提供设备：iPhone 13 Pro、iOS 15.4.1，并选择此安装路线。
-请使用 0.3.1 build7 多语种版。不要使用此前最低要求 iOS 17 的 0.1.0 包。
+请使用 0.4.0 build11 多语种版。不要使用此前最低要求 iOS 17 的 0.1.0 包。
 本次同时调整了源代码的系统 API、部署目标与二进制检查，并非仅修改 Info.plist 数字。
 
 将修复版 IPA 传到手机，用已经安装的 TrollStore 打开并覆盖安装，然后重试启动。
@@ -55,3 +55,7 @@ TrollStore 官方支持说明：https://github.com/opa334/TrollStore
 
 - Sideloadly：https://sideloadly.io/
 - 火山引擎同传：https://docs.volcengine.com/docs/doubao-voice/simultaneous-interpretation?lang=zh
+
+## 0.4.0 配置百炼
+
+覆盖安装后进入更多→设置，选择阿里百炼。填写业务空间API Host（不能填Key）及完整百炼Key，点保存并返回；再在顶部选择译入语言。源语言自动识别，需反向时改译入语言。火山Key独立保留，可结束会话后切回。不要将Key写入GitHub、安装包或普通偏好。新版百炼收音/译音还需用户iOS15.4.1真机确认。

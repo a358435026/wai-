@@ -1,3 +1,76 @@
+# 0.4.0 build11 最终验证 · 2026-11-27
+
+- 应用提交9fef6fdb5ec9bc9e8645a45fcea2bde55cc65b1d；成功构建：https://github.com/a358435026/wai-/actions/runs/45948441660。
+- 25核心测试和5项原生模拟器UI用例全部通过，0失败。包含百炼Host填写、合成Key保存、切回火山无Bali凭据、再切回百炼仍已保存、自动源语言、印地语播报能力选择；既有字幕/设置/诊断/动态状态样例流程也通过。
+- CI日志确认模拟器App已签名，使用真实系统Keychain；没有用明文或假存储来绕过-34018。Simulator entitlement仅应用于Simulator SDK；iPhone Release仍未签名供TrollStore安装。
+- 已提取并目视检查原生百炼设置及印地语选择截图，截图中仅含明确的合成测试凭据与假Host。
+- 最终IPA：0.4.0 build11，225801字节，ARM64/iPhoneOS，Info.plist最低15.0、Mach-O最低15.0.0，目标iOS15.4.1门禁通过。
+- IPA SHA256：af11106d86602ed4b8bfe05f3521206aa103fd3f310c69c963524ccf28d4c8b5。
+- artifact ZIP SHA256：5570734438a395909f53c3d4d6c66fc0c7b23aa622bbfe80dd1a1c08397182a1，与GitHub一致；ZIP CRC、版本build11、未内置用户Key或个人Host检查通过。
+- UI ZIP SHA256：b3131459978cea0b77cc6b50f3ceb619bc0ad3d52856c9b89e9fb2e3a797d4ea，与GitHub一致。
+- 代表性电脑真实API短测已通过英文S2S、英文S2T（0音频字节）及印地语S2S。新版iPhone采集/24kHz译音/长时与弱网仍需用户真机验证；模拟器状态样例不冒充真实麦克风或扬声器证明。
+
+---
+
+# 0.4.0 build11 模拟器钥匙串签名修复（验证中）
+
+build10的25核心及4项既有UI全部通过。新增配置用例的错误弹窗明确显示Keychain OSStatus -34018；Apple将其定义为缺少所需entitlement。之前仅从未关闭的设置页推断键盘/点按问题不充分，现据实际错误收窄原因。旧CI关闭了模拟器签名，无法验证真实Keychain保存。
+
+build11仅为Simulator SDK设置application-identifier和keychain-access-groups，UI步骤启用本地ad-hoc签名；真机Release仍未签名，交给用户TrollStore处理。凭据代码不改为明文偏好或假Keychain。缺签名错误也不再误提示只需解锁手机。
+
+应用/配置提交9fef6fdb5ec9bc9e8645a45fcea2bde55cc65b1d；https://github.com/a358435026/wai-/actions/runs/45948441660。
+参考：https://developer.apple.com/documentation/security/errsecmissingentitlement。
+
+---
+
+# 0.4.0 build10 配置回归（验证中）
+
+build9顶部保存已显示，但UI测试仍未确认保存页关闭；当轮其他入口也有点按未展开的失败。不能单凭此断言Keychain已损坏或已通过。新测试等待按钮存在、启用且可点后在按钮中心点按，确认设置页关闭；遇到断言失败立即停止，避免继续操作被遮挡页面。保存错误改成弹窗，确保输入/钥匙串错误不会藏在表单下方。UI步骤窗口增至20分钟，包含模拟器编译及测试。
+
+同时补充模型响应failed/incomplete状态处理，避免把失败响应当成正常生成。新增一项核心用例；期望25核心和5原生UI检查，结果待补。应用提交fc6d84c6dd490caa2ff9cca3c7ad664c0bf333db。25核心及iPhone编译通过；https://github.com/a358435026/wai-/actions/runs/45946889640。
+
+- build10 IPA225782字节；ARM64/iPhoneOS；Info.plist/Mach-O最低iOS15.0；版本/CRC/无内置用户Key或个人Host检查通过。
+- IPA SHA256：a6d2acbd5c8b68eee01cadda127814de88c3a276cdab1246eb2b3e2037a7f609。
+- artifact SHA256：6b921cd9a8e511bd3adf52fcebccdc1eeafb21a941fc7694863453947eb6fbc0，与GitHub一致。
+
+---
+
+# 0.4.0 build9 保存入口修复（验证中）
+
+首轮24项核心和4项既有UI用例通过；新增百炼配置用例在保存后点击被设置页遮挡的首页按钮失败。原始测试录屏确认键盘仍打开、底部保存入口不可见，未完成设置页关闭，不能将该用例记为Keychain隔离通过。
+
+build9将“保存并返回”移至始终可见的顶部工具栏，SecureField键盘提交也执行保存；钥匙串错误显示OSStatus以便定位。新增测试先确认设置页消失，再操作首页。去除主设置页中不必要的采样率说明，采样率仍保留在连接诊断。
+
+修复提交：ddbac9c61efec2671ddfcc5133fdb4076b397f3c；https://github.com/a358435026/wai-/actions/runs/45944199937。
+
+---
+
+# 0.4.0 百炼接入验证（进行中）
+
+- 应用实现提交48ba172aba3018ee2739c364ce80023819044afc；构建：https://github.com/a358435026/wai-/actions/runs/45942215241。
+- 24项核心测试和iPhone目标Release编译通过。核心新增百炼Host白名单、握手就绪门禁、JSON/base64、字幕最终替换、交错item、100条历史上限、60/29目录和采样率配置测试。
+- IPA0.4.0 build8，223511字节，ARM64/iPhoneOS；Info.plist/Mach-O最低iOS15.0，目标15.4.1门禁通过。
+- IPA SHA256：7fdc835c6c75f2955c968c4bee800f0d764f86f1f3080388987394f7e64ab038。
+- 外层ZIP SHA256：0c16fdc03593471049bca9ca99e27d3c3beec67bf60fd61c7d45699e8200fce0，与GitHub一致。ZIP CRC、build8以及未嵌入两家用户Key或个人API Host均已检查。
+- 原有4个UI流程及新增服务商切换/Host字段/合成Key隔离/自动源语言/印地语选择流程等待本轮结果。UI仅使用明确的合成无效Key，不发起计费请求。
+- 本机真实百炼补测，使用原有代理、官方样例及用户授权Key，每次12秒音频+0.5秒尾静音：中译英仅字幕157包，原文/译文正常、0音频字节，session.finished；中译印地语157包，字幕和35音频分片、514560字节24kHz PCM（10.72秒），正常结束。之前英文S2S短测见下方。
+- 不把电脑API短测或模拟器UI等同于新版iOS客户端的真机采集/24kHz扬声器播放验收。用户iPhone新版本仍待安装确认。
+
+---
+
+# 百炼官方实时同传短测 · 2026-11-27
+
+使用用户明确授权提供的百炼Key，只在临时进程环境中传入，不写源码或结果。通过现有127.0.0.1:10809代理连接控制台实际业务空间API Host，未修改VPN。截图中的先前尝试将Key填入Host位置，在本机验证阶段退出，没有发起同传请求。
+
+- 模型：qwen3.8-livetranslate-flash-realtime；12秒官方样例输入+0.5秒静音，157包。
+- session.created/session.updated均确认后上传；中文原文、英文译文均返回。
+- 33个response.audio.delta，460800字节PCM16/24kHz/mono，约9.6秒；session.finished正常完成。
+- 已检查生成WAV的声道、位宽、采样率、非零音频能量；提供用户试听，不冒充人工听感评价。
+- 这是代表性电脑API短测，验证该Key可调用本模型及字幕和译音路径，不是长期稳定性/跨平台质量比较。当前iOS0.3.1仍只接火山，引入百炼需要后续适配及真机验证。
+- 测试器可读取本机bailian-host.txt预填非凭据的Host；该文件不写入公共仓库。Key仍只通过隐藏输入读取。
+
+---
+
 # 0.3.1 最终结果
 
 - 最终构建/验证提交：a9952c5a8031e25547fde89d9b5b77811771d8ee；https://github.com/a358435026/wai-/actions/runs/45823094801。

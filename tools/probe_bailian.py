@@ -58,7 +58,7 @@ def proxy_tunnel(host):
         raise
 
 
-async def run_session(ws, pcm, result, audio, log=print, pace=0.08):
+async def run_session(ws, pcm, result, audio, log=print, pace=0.08, target="en", speech=True):
     sources, translations = {}, {}
     counts = Counter()
 
@@ -92,11 +92,11 @@ async def run_session(ws, pcm, result, audio, log=print, pace=0.08):
     await wait_for("session.created")
     log("已连接；正在验证模型权限和会话配置……", flush=True)
     await ws.send(json.dumps({"type": "session.update", "session": {
-        "input_modalities": ["audio"], "output_modalities": ["text", "audio"],
+        "input_modalities": ["audio"], "output_modalities": ["text", "audio"] if speech else ["text"],
         "audio": {"input": {"format": {"type": "pcm", "sample_rate": 16000},
                             "turn_detection": {"type": "speaker_detection", "threshold": 0.5}},
                   "output": {"voice": "Tina"}},
-        "enable_voice_clone": False, "translation": {"language": "en"}}}))
+        "enable_voice_clone": False, "translation": {"language": target}}}))
     await wait_for("session.updated")
     log("配置已确认；上传最多12秒测试音频，不使用麦克风……", flush=True)
 
@@ -119,7 +119,8 @@ async def run_session(ws, pcm, result, audio, log=print, pace=0.08):
         sender.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await sender
-    result["ok"] = bool(result["source"].strip() and result["translation"].strip() and audio and result["session_finished"])
+    result["ok"] = bool(result["source"].strip() and result["translation"].strip() and
+                        (bool(audio) if speech else not audio) and result["session_finished"])
     if not result["ok"]:
         raise RuntimeError("连接已结束，但原文/译文/译音不完整，不能算测试通过。")
 
@@ -140,14 +141,14 @@ def write_audio(path, audio):
             wav.writeframes(audio)
 
 
-async def probe(host, key, sample, result, audio):
+async def probe(host, key, sample, result, audio, target="en", speech=True):
     url = f"wss://{host}/api-ws/v1/realtime?model={MODEL}"
     tunnel = await asyncio.to_thread(proxy_tunnel, host)
     try:
         async with websockets.connect(url, sock=tunnel,
                 extra_headers={"Authorization": "Bearer " + key},
                 open_timeout=20, close_timeout=3, max_size=4 * 1024 * 1024) as ws:
-            await run_session(ws, sample, result, audio)
+            await run_session(ws, sample, result, audio, target=target, speech=speech)
     finally:
         tunnel.close()
 

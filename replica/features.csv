@@ -12,3 +12,6 @@ F10,S04,must,offline microphone probe with input queue diagnostics,yes,user conf
 F11,S01,must,input and output driven fluid animation,yes,user confirmed input animation; native Canvas rendering and speaking presentation passed UI tests; actual output meter is wired to mixer tap
 F12,S02,must,source and target search with48 languages9 dialects,yes,48 languages9 source dialects; search selection return swap and home label passed native UI
 F13,S02,must,true S2T mode and speech capability disclosure,yes,true s2t encoding verified; native switch and mode hint passed; representative live s2t returns no audio
+
+F14,S03,must,Bailian provider setup and isolated credentials,yes,native provider Host synthetic Key save isolation and restoration passed genuine signed simulator Keychain
+F15,S01,must,Qwen session lifecycle captions and 24k playback,yes,25 core and native archive passed; English speech/text-only and Hindi speech API probes passed; new phone playback validation pending
