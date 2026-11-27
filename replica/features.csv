@@ -17,3 +17,6 @@ F14,S03,must,Bailian provider setup and isolated credentials,yes,native provider
 F15,S01,must,Qwen session lifecycle captions and 24k playback,yes,25 core and native archive passed; English speech/text-only and Hindi speech API probes passed; new phone playback validation pending
 
 F16,S01,must,native conversation layout country emblems dark mode and Dynamic Type,yes,0.5.0 build13 archive plus25 core and7 native UI passed; screenshots reviewed; phone audio acceptance pending
+
+F17,S01,must,compatible single-active-service fallback and clear HTTP failures,in progress,0.6.0 routing health and credential probe tests pending
+F18,S03,must,trade glossary import and real provider schema,in progress,official protobuf interop plus Ali translation.corpus.phrases; both empty-session acceptance probes passed

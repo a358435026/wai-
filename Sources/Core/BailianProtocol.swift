@@ -48,10 +48,12 @@ public enum BailianWire {
         let speech = configuration.mode == .speechToSpeech && language.defaultSpeech
         let input: [String: Any] = ["format":["type":"pcm", "sample_rate":16000] as [String:Any],
                                     "turn_detection":["type":"speaker_detection", "threshold":0.5] as [String:Any]]
+        var translation: [String: Any] = ["language": configuration.target]
+        if !configuration.glossary.isEmpty { translation["corpus"] = ["phrases": configuration.glossary] }
         let session: [String: Any] = [
             "input_modalities":["audio"], "output_modalities": speech ? ["text", "audio"] : ["text"],
             "audio":["input":input, "output":["voice":"Tina"]] as [String:Any],
-            "enable_voice_clone":false, "translation":["language":configuration.target]
+            "enable_voice_clone":false, "translation":translation
         ]
         return try JSONSerialization.data(withJSONObject: ["type":"session.update", "session":session])
     }

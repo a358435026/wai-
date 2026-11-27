@@ -76,11 +76,12 @@ public struct ASTConfiguration: Equatable, Sendable {
     public var target: String
     public var speaker: String
     public var ttsResource: String
+    public var glossary: [String: String]
     public var mode: ASTMode
     public init(source: String = "zh", target: String = "en", speaker: String = "", ttsResource: String = "",
-                mode: ASTMode = .speechToSpeech) {
+                mode: ASTMode = .speechToSpeech, glossary: [String: String] = [:]) {
         self.source = source; self.target = target; self.speaker = speaker; self.ttsResource = ttsResource
-        self.mode = mode
+        self.mode = mode; self.glossary = glossary
     }
 }
 
@@ -93,6 +94,13 @@ public enum ASTRequest {
         params += ProtoWire.string(3, configuration.target)
         if !configuration.speaker.isEmpty { params += ProtoWire.string(4, configuration.speaker) }
         if !configuration.ttsResource.isEmpty { params += ProtoWire.string(8, configuration.ttsResource) }
+        if !configuration.glossary.isEmpty {
+            // Official ReqParams.corpus=100; Corpus.glossary_list=10 (not request field3).
+            let entries = configuration.glossary.sorted { $0.key < $1.key }.reduce(into: Data()) { data, term in
+                data += ProtoWire.bytes(10, ProtoWire.string(1, term.key) + ProtoWire.string(2, term.value))
+            }
+            params += ProtoWire.bytes(100, entries)
+        }
         var result = meta(sessionID) + ProtoWire.int(2, 100) + ProtoWire.bytes(4, source)
         if configuration.mode == .speechToSpeech { result += ProtoWire.bytes(5, target) }
         return result + ProtoWire.bytes(6, params)

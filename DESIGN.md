@@ -11,3 +11,7 @@
 接口/鉴权/Keychain/AudioQueue/播放器和模型状态逻辑均不改动。不引入模拟字幕至Release；DEBUG fixtures只用于原生UI测试。没有内置用户Host或密钥。
 
 使用ui-ux-pro-max的触控/可访问性原则、ios-interface-design的任务层级和SwiftUI Pro的Dynamic Type/Reduce Motion与部署目标检查；不套用高于iOS15的API。
+
+## 0.6.0 连接恢复与术语
+
+设置提供每家独立连接测试、自动备用开关和火山备用源语，显示已保存服务而不显示密钥。连接错误区域不再保留待机欢迎文案或大球，避免错误被挤下；诊断展示握手确认耗时、上次失败、首译间隔和术语条数。术语使用独立页面编辑/导入，下次连接生效。

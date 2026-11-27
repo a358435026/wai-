@@ -60,7 +60,8 @@ final class BailianClient: TranslationClient {
                 }
             } catch {
                 if !self.closed && !Task.isCancelled {
-                    self.onError(BailianError(error.localizedDescription.replacingOccurrences(of:key, with:"[Key已隐藏]")))
+                    let wrapped = WebSocketFailure.wrap(error, task: task, provider: .bailian)
+                    self.onError(BailianError(wrapped.localizedDescription.replacingOccurrences(of:key, with:"[Key已隐藏]")))
                 }
             }
         }
@@ -74,7 +75,7 @@ final class BailianClient: TranslationClient {
                             if let error { continuation.resume(throwing:error) } else { continuation.resume() }
                         }
                     }
-                } catch { if !self.closed { self.onError(error) }; break }
+                } catch { if !self.closed { self.onError(WebSocketFailure.wrap(error, task: task, provider: .bailian)) }; break }
             }
         }
     }

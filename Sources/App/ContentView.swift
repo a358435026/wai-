@@ -8,6 +8,10 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var key = ""
     @State private var error: String?
+    @State private var probe: ProviderConnectionProbe?
+    @State private var probeTask: Task<Void, Never>?
+    @State private var probeResult = ""
+    @State private var testing = false
     var body: some View {
         NavigationView {
             Form {
@@ -41,6 +45,29 @@ struct SettingsView: View {
                     }
                 } header: { Text("个人自用凭据") } footer: {
                     Text("两家Key分别保存在本机钥匙串，切换服务不会覆盖另一家的Key。本客户端供个人自用，不内置凭据；调用由当前服务商计费。")
+                }
+                Section("连接与自动备用") {
+                    Button(testing ? "正在测试…" : "测试当前服务连接（不录音）") { testConnection() }
+                        .disabled(testing || model.active).accessibilityIdentifier("testProviderConnection")
+                    if !probeResult.isEmpty { Text(probeResult).font(.footnote).textSelection(.enabled) }
+                    Text("保存Key仅代表本机保存成功，不代表鉴权通过。连接测试不录音、不上传声音；会创建并关闭一次短会话，具体费用按服务商规则。")
+                        .font(.footnote).foregroundColor(.secondary)
+                    Toggle("连接失败或译文长时间无响应时切换", isOn: $model.automaticFallback)
+                        .disabled(model.active).accessibilityIdentifier("automaticFallback")
+                    if model.automaticFallback {
+                        Picker("火山备用源语言", selection: $model.backupSource) {
+                            ForEach(ASTLanguages.sources.filter { $0.id != "auto" }) { Text($0.name).tag($0.id) }
+                        }.disabled(model.active)
+                        Text(model.fallbackDescription).font(.footnote).foregroundColor(.secondary)
+                        Text("不会同时使用两家。每次开始最多换一次，不保证零延迟；切换会丢弃未完成的音频，请重说最后一句。静音或没有说话不会触发等待译文计时。")
+                            .font(.footnote).foregroundColor(.secondary)
+                    }
+                    Text("已保存：\(model.configuredServices.isEmpty ? "暂无" : model.configuredServices)").font(.footnote)
+                }
+                Section {
+                    NavigationLink { TerminologySettingsView(model: model) } label: {
+                        Label("外贸专业术语", systemImage: "text.book.closed")
+                    }.accessibilityIdentifier("tradeTerminology")
                 }
                 Section("本机音频测试") {
                     Button("测试麦克风（不联网）") { dismiss(); model.testMicrophone() }.disabled(model.active)
@@ -76,10 +103,31 @@ struct SettingsView: View {
                 ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } }
             }
         }.navigationViewStyle(.stack).tint(teal)
-            .onChange(of: model.provider) { _ in key = ""; error = nil }
+             .onChange(of: model.provider) { _ in
+                probeTask?.cancel(); probe?.cancel(); testing = false; probeResult = ""
+                key = ""; error = nil
+            }
+            .onDisappear { probeTask?.cancel(); probe?.cancel() }
             .alert("无法保存设置", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("知道了", role: .cancel) { error = nil }
             } message: { Text(error ?? "请检查输入后重试。") }
+    }
+    private func testConnection() {
+        let value = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let credential = value.isEmpty ? KeychainStore.read(provider: model.provider) : value,
+              !credential.isEmpty else { error = "请先粘贴或保存当前服务的Key。"; return }
+        testing = true; probeResult = ""
+        let provider = model.provider; let host = model.bailianHost
+        let check = ProviderConnectionProbe(); probe = check
+        probeTask = Task {
+            do {
+                let result = try await check.run(provider: provider, key: credential, host: host)
+                if !Task.isCancelled && model.provider == provider { probeResult = provider.title + "：" + result }
+            } catch {
+                if !Task.isCancelled && model.provider == provider { probeResult = provider.title + "：" + error.localizedDescription }
+            }
+            if !Task.isCancelled { testing = false }
+        }
     }
     private func saveAndClose() {
         do { try model.saveKey(key); key = ""; dismiss() }

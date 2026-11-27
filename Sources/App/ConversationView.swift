@@ -29,14 +29,17 @@ struct ContentView: View {
                             }.disabled(!model.playing).accessibilityIdentifier("voiceStatus")
                             Spacer(minLength: 0)
                         }
+                        if let error = model.errorMessage { errorCard(error) }
+                        if model.errorMessage == nil {
                         VoiceOrb(level: model.inputLevel, output: model.outputLevel,
                                  active: model.phase == .live, playing: model.playing)
                             .frame(width: hasCaptions && showCaptions ? 108 : 158,
                                    height: hasCaptions && showCaptions ? 108 : 158)
                             .accessibilityLabel(model.playing ? "正在播放译音" : (model.active ? "正在收音" : "语音待机"))
+                        }
                         if showCaptions && hasCaptions {
                             ConversationTranscript(model: model)
-                        } else {
+                        } else if model.errorMessage == nil {
                             VStack(spacing: 12) {
                                 Text(model.localTest ? "对着手机说话" : (model.active ? "你说的话，会在这里呈现" : "下一段对话，\n从这里开始。"))
                                     .font(.title2.weight(.semibold)).multilineTextAlignment(.center)
@@ -44,15 +47,13 @@ struct ContentView: View {
                                     .font(.subheadline).foregroundColor(.secondary).multilineTextAlignment(.center)
                             }.padding(.vertical, 18).frame(maxWidth: .infinity)
                         }
-                        if let error = model.errorMessage {
-                            errorCard(error)
-                        }
                         sessionNotes
                         Color.clear.frame(height: 1).id("latest")
                     }.padding(.horizontal, 22).padding(.top, 8).padding(.bottom, 14)
                 }
                 .onChange(of: model.translation.captions) { _ in reader.scrollTo("latest", anchor: .bottom) }
                 .onChange(of: model.source.captions) { _ in reader.scrollTo("latest", anchor: .bottom) }
+                .onChange(of: model.errorMessage) { value in if value != nil { reader.scrollTo("latest", anchor: .bottom) } }
             }
             controls
         }
@@ -129,6 +130,8 @@ struct ContentView: View {
         VStack(spacing: 8) {
             if model.phase == .connecting || model.phase == .finishing { ProgressView() }
             if model.localTest { Text("本机麦克风测试 · 不联网") }
+            if !model.switchNotice.isEmpty { Text(model.switchNotice).accessibilityIdentifier("switchNotice") }
+            if let delay = model.firstTranslationDelay { Text(String(format: "原文完成至首译 %.1f 秒", delay)) }
             if model.micMuted && model.active { Text("麦克风已静音，会话仍可能计费") }
             if !model.producesSpeech && !model.localTest {
                 Text("仅字幕：本次不生成译音").accessibilityIdentifier("outputModeHint")
@@ -285,6 +288,11 @@ struct ContentView: View {
                     LabeledContentCompat("服务商", model.provider.title)
                     LabeledContentCompat("译音采样率", model.provider == .bailian ? "24 kHz" : "16 kHz")
                     LabeledContentCompat("状态", model.status)
+                    LabeledContentCompat("自动备用", model.automaticFallback ? "开启，最多切换一次" : "关闭")
+                    LabeledContentCompat("已保存服务", model.configuredServices)
+                    LabeledContentCompat("连接确认耗时", model.handshakeMilliseconds.map { "\($0) ms" } ?? "尚未就绪")
+                    LabeledContentCompat("术语数量", String(model.glossaryCount))
+                    if !model.latestFailure.isEmpty { Text(model.latestFailure).font(.footnote).textSelection(.enabled) }
                     LabeledContentCompat("翻译方向", model.translationTitle)
                     LabeledContentCompat("服务模式", model.producesSpeech ? "字幕与译音 S2S" : "仅字幕 S2T")
                     LabeledContentCompat("麦克风权限", model.microphonePermission)

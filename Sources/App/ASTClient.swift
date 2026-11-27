@@ -51,7 +51,7 @@ final class ASTClient: TranslationClient {
                     self.onResponse(response)
                 }
             } catch {
-                if !self.closed && !Task.isCancelled { self.onError(error) }
+                if !self.closed && !Task.isCancelled { self.onError(WebSocketFailure.wrap(error, task: task, provider: .volcengine)) }
             }
         }
         pingTask = Task { [weak self] in
@@ -66,7 +66,7 @@ final class ASTClient: TranslationClient {
                         }
                     }
                 } catch {
-                    if !self.closed && !Task.isCancelled { self.onError(error) }
+                    if !self.closed && !Task.isCancelled { self.onError(WebSocketFailure.wrap(error, task: task, provider: .volcengine)) }
                     break
                 }
             }
@@ -78,7 +78,8 @@ final class ASTClient: TranslationClient {
     func finish() async throws { try await send(ASTRequest.finish(sessionID: sessionID)) }
     private func send(_ data: Data) async throws {
         guard !closed, let socket else { throw ClientError.disconnected }
-        try await socket.send(.data(data))
+        do { try await socket.send(.data(data)) }
+        catch { throw WebSocketFailure.wrap(error, task: socket, provider: .volcengine) }
     }
     func disconnect() {
         guard !closed else { return }

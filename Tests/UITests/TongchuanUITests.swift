@@ -45,6 +45,37 @@ final class TongchuanUITests: XCTestCase {
         shot.name = "Dark mode accessibility text size and fixed primary action"
         shot.lifetime = .keepAlways; add(shot)
     }
+    func testAutomaticFallbackAndEditableTradeTermsSettings() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-reset-languages"]
+        app.launch()
+        openMore(app, destination: "设置"); app.buttons["设置"].tap()
+        var tries = 0
+        while !app.buttons["tradeTerminology"].isHittable && tries < 6 { app.swipeUp(); tries += 1 }
+        XCTAssertTrue(app.buttons["tradeTerminology"].waitForExistence(timeout: 5))
+        app.buttons["tradeTerminology"].tap()
+        let sample = app.buttons["sampleTerms"]
+        if !sample.isHittable { app.swipeUp() }
+        waitReady(sample); sample.tap()
+        let save = app.buttons["saveTerms"]
+        if !save.isHittable { app.swipeUp() }
+        save.tap()
+        XCTAssertTrue(app.staticTexts["词表已保存，下次连接生效"].waitForExistence(timeout: 5))
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Editable trade glossary without credentials"
+        shot.lifetime = .keepAlways; add(shot)
+        // The live connection probe is deliberately not invoked by UI tests.
+    }
+    func testAuthenticationErrorOffersDiagnosisWithoutBlamingBalance() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-reset-languages", "--ui-auth-error"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["errorMessage"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["errorMessage"].label.contains("401"))
+        XCTAssertTrue(app.buttons["连接诊断"].exists)
+        XCTAssertFalse(app.staticTexts["下一段对话，\n从这里开始。"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Explicit authentication failure and recovery"
+        shot.lifetime = .keepAlways; add(shot)
+    }
     func testProviderSetupKeepsKeysSeparateAndShowsAutomaticSource() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-reset-languages"]
@@ -129,6 +160,7 @@ final class TongchuanUITests: XCTestCase {
         openMore(app, destination: "连接诊断 / 测试收音")
         app.buttons["连接诊断 / 测试收音"].tap()
         XCTAssertTrue(app.buttons["localMicTest"].waitForExistence(timeout: 5))
+        for _ in 0..<5 { if app.staticTexts["录音回调次数"].isHittable { break }; app.swipeUp() }
         XCTAssertTrue(app.staticTexts["录音回调次数"].exists)
     }
     func testLaunchAndCredentialSetup() throws {
@@ -155,6 +187,7 @@ final class TongchuanUITests: XCTestCase {
         app.buttons["完成"].tap()
         openMore(app, destination: "连接诊断 / 测试收音")
         app.buttons["连接诊断 / 测试收音"].tap()
+        for _ in 0..<6 { if app.staticTexts["音频已发送包数"].isHittable { break }; app.swipeUp() }
         XCTAssertTrue(app.staticTexts["音频已发送包数"].waitForExistence(timeout: 5))
         app.buttons["完成"].tap()
     }

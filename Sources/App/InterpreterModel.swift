@@ -39,6 +39,35 @@ final class InterpreterModel: ObservableObject {
     }
     @Published var keySaved = false
     @Published var showSettings = false
+    @Published var automaticFallback = UserDefaults.standard.object(forKey: "routing.automatic") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(automaticFallback, forKey: "routing.automatic") }
+    }
+    @Published var backupSource = UserDefaults.standard.string(forKey: "routing.source") ?? "zh" {
+        didSet { UserDefaults.standard.set(backupSource, forKey: "routing.source") }
+    }
+    @Published var terminologyEnabled = UserDefaults.standard.bool(forKey: "terms.enabled") {
+        didSet { UserDefaults.standard.set(terminologyEnabled, forKey: "terms.enabled") }
+    }
+    @Published var customTerms = UserDefaults.standard.string(forKey: "terms.text") ?? "" {
+        didSet { UserDefaults.standard.set(customTerms, forKey: "terms.text") }
+    }
+    @Published var termsSource = UserDefaults.standard.string(forKey: "terms.source") ?? "zh" {
+        didSet { UserDefaults.standard.set(termsSource, forKey: "terms.source") }
+    }
+    @Published var termsTarget = UserDefaults.standard.string(forKey: "terms.target") ?? "en" {
+        didSet { UserDefaults.standard.set(termsTarget, forKey: "terms.target") }
+    }
+    @Published private(set) var switchNotice = ""
+    @Published private(set) var latestFailure = ""
+    @Published private(set) var firstTranslationDelay: Double?
+    @Published private(set) var handshakeMilliseconds: Int?
+    private var attempted: Set<TranslationProvider> = []
+    private var health = TranslationHealth()
+    private var connectionStarted = Date()
+    private var latestSourceItem = ""
+    private var pendingSwitchReason = ""
+    var configuredServices: String { TranslationProvider.allCases.filter { KeychainStore.read(provider: $0) != nil }.map(\.title).joined(separator: "、") }
+    var glossaryCount: Int { configuration.glossary.count }
     private var client: (any TranslationClient)?
     private var audio: AudioIO?
     private var streamContinuation: AsyncStream<Data>.Continuation?
@@ -69,10 +98,28 @@ final class InterpreterModel: ObservableObject {
     var producesSpeech: Bool { configuration.mode == .speechToSpeech }
     var canSwap: Bool { provider == .volcengine && !bidirectional && ASTLanguages.target(sourceCode) != nil }
     var configuration: ASTConfiguration {
-        ASTConfiguration(source: bidirectional ? "zhen" : sourceCode,
+        ASTConfiguration(source: provider == .bailian ? "bailian-auto" : bidirectional ? "zhen" : sourceCode,
                          target: bidirectional ? "zhen" : targetCode,
                          mode: provider == .bailian ? (subtitlesOnly || !targetLanguage.defaultSpeech ? .subtitles : .speechToSpeech) : bidirectional ? (subtitlesOnly ? .subtitles : .speechToSpeech)
-                            : ASTLanguages.mode(target: targetCode, subtitlesOnly: subtitlesOnly))
+                            : ASTLanguages.mode(target: targetCode, subtitlesOnly: subtitlesOnly),
+                         glossary: (try? glossary()) ?? [:])
+    }
+    private func glossary() throws -> [String: String] {
+        try TradeTerminology.combined(source: provider == .bailian ? "bailian-auto" : sourceCode,
+            target: targetCode, enabled: terminologyEnabled, customSource: termsSource,
+            customTarget: termsTarget, custom: customTerms)
+    }
+    var fallbackDescription: String {
+        let current = configuration
+        let next: TranslationProvider = provider == .bailian ? .volcengine : .bailian
+        guard KeychainStore.read(provider: next) != nil else { return "备用\(next.title)尚未配置Key；仍可单独使用当前服务。" }
+        guard let recipe = FailoverPolicy.configuration(for: next, current: current, automaticSource: backupSource) else {
+            return "备用服务不支持当前方向或译音能力，本次不会自动降级或改变目标语言。"
+        }
+        if next == .volcengine {
+            return "百炼自动识别；备用火山按\(ASTLanguages.source(recipe.source)?.name ?? recipe.source) → \(targetLanguage.name)。请确保备用源语言与你说的语言一致。"
+        }
+        return "当前服务连接失败、8秒未就绪或完整原文10秒无译文时，最多切换一次；先关闭旧会话，再启用备用。不会同时上传两家。"
     }
     func selectSource(_ code: String) {
         guard provider == .volcengine, !active, ASTLanguages.source(code) != nil else { return }
@@ -133,6 +180,10 @@ final class InterpreterModel: ObservableObject {
             provider = .volcengine; sourceCode = "zh"; targetCode = "en"; subtitlesOnly = false
             keySaved = KeychainStore.read(provider: provider) != nil
         }
+        if ProcessInfo.processInfo.arguments.contains("--ui-auth-error") {
+            errorMessage = ConnectionFailure(provider: .volcengine, status: 401).localizedDescription
+            status = "连接已停止"
+        }
         if ProcessInfo.processInfo.arguments.contains("--ui-speaking") {
             playing = true; outputLevel = 0.7
         }
@@ -174,6 +225,9 @@ final class InterpreterModel: ObservableObject {
     func saveKey(_ value: String) throws {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        guard !trimmed.contains(where: { $0.isWhitespace }), trimmed.count >= 16 else {
+            throw BailianError("请只粘贴完整Key，不要附带说明文字、换行或空格。")
+        }
         if provider == .bailian {
             bailianHost = try BailianWire.normalizedHost(bailianHost)
             guard trimmed.hasPrefix("sk-"), !trimmed.contains("*") else { throw BailianError("请填写完整的百炼 API Key。") }
@@ -221,8 +275,15 @@ final class InterpreterModel: ObservableObject {
         speakerHoldUntil = .distantPast
     }
 
-    func start() {
+    func start() { startSession(resuming: false) }
+    private func startSession(resuming: Bool) {
         guard phase == .idle else { return }
+        if !resuming {
+            attempted = []; switchNotice = ""; latestFailure = ""; pendingSwitchReason = ""
+        }
+        attempted.insert(provider)
+        do { _ = try glossary() } catch { errorMessage = error.localizedDescription; return }
+        health = TranslationHealth(); latestSourceItem = ""; firstTranslationDelay = nil; handshakeMilliseconds = nil
         if provider == .volcengine, !bidirectional, let error = ASTLanguages.validationError(source: sourceCode, target: targetCode) {
             errorMessage = error; return
         }
@@ -231,7 +292,9 @@ final class InterpreterModel: ObservableObject {
             catch { errorMessage = error.localizedDescription; showSettings = true; return }
         }
         guard let key = KeychainStore.read(provider: provider), !key.isEmpty else { showSettings = true; return }
-        clearCaptions(); micMuted = false
+        if !resuming { clearCaptions() }
+        else { source.end(); translation.end(); errorMessage = nil }
+        micMuted = false
         resetAudioStats(); localTest = false; skipCurrentSpeech = false
         phase = .connecting; status = "正在申请麦克风并连接"
         let run = UUID(); generation = run
@@ -259,13 +322,14 @@ final class InterpreterModel: ObservableObject {
                 self.fail(self.captureFailureDescription); return
             }
             self.status = "正在连接\(self.provider.title)"
+            self.connectionStarted = Date()
             let onResponse: (ASTResponse) -> Void = { [weak self] response in
                 guard let self, self.generation == run else { return }
                 self.receive(response)
             }
             let onError: (Error) -> Void = { [weak self] error in
                 guard let self, self.generation == run else { return }
-                self.fail(self.describe(error))
+                self.serviceFailed(self.describe(error))
             }
             let client: any TranslationClient
             do {
@@ -275,34 +339,47 @@ final class InterpreterModel: ObservableObject {
             } catch { self.fail(error.localizedDescription); return }
             self.client = client
             self.deadlineTask = Task { [weak self] in
-                do { try await Task.sleep(nanoseconds: 20_000_000_000) } catch { return }
+                do { try await Task.sleep(nanoseconds: self?.automaticFallback == true ? 8_000_000_000 : 20_000_000_000) } catch { return }
                 guard let self, self.generation == run, self.phase == .connecting else { return }
-                self.fail("连接超时。请检查网络、API Key 和同声传译服务是否已开通。")
+                self.serviceFailed("\(self.provider.title)连接超时，尚未确认同传会话。")
             }
             do { try await client.connect(key: key, configuration: self.configuration) }
-            catch { if self.generation == run && !Task.isCancelled { self.fail(self.describe(error)) } }
+            catch { if self.generation == run && !Task.isCancelled { self.serviceFailed(self.describe(error)) } }
         }
     }
 
     private func receive(_ response: ASTResponse) {
         if ![0, 21000, 20000000].contains(response.statusCode) || response.event == 153 {
-            fail("服务错误 \(response.statusCode)：\(response.message.isEmpty ? "请检查服务权限、余额和语言配置。" : response.message)")
+            serviceFailed("\(provider.title)服务错误 \(response.statusCode)：\(response.message.isEmpty ? "请检查服务权限、余额和语言配置。" : response.message)")
             return
         }
         switch response.event {
         case 150:
             guard phase == .connecting else { return }
             deadlineTask?.cancel()
+            handshakeMilliseconds = Int(Date().timeIntervalSince(connectionStarted) * 1000)
+            persistLanguages()
+            if automaticFallback { UserDefaults.standard.set(provider.rawValue, forKey: "translation.provider") }
+            if !pendingSwitchReason.isEmpty { switchNotice = pendingSwitchReason + " 已连接；切换期间请重说最后一句。" }
             phase = .live; status = "正在聆听"
             lastCapture = Date()
             UIApplication.shared.isIdleTimerDisabled = true
-        case 660: source.set(id: response.captionID, text: response.text, final: response.final)
-        case 661: translation.set(id: response.captionID, text: response.text, final: response.final)
-        case 650: source.begin()
+        case 660:
+            if latestSourceItem != response.captionID { latestSourceItem = response.captionID; health.sourceBegan() }
+            source.set(id: response.captionID, text: response.text, final: response.final)
+            if response.final && !response.text.isEmpty { health.sourceCompleted(at: Date()) }
+        case 661:
+            translation.set(id: response.captionID, text: response.text, final: response.final)
+            if !response.text.isEmpty { health.translated(at: Date()); firstTranslationDelay = health.lastLatency }
+        case 650: source.begin(); health.sourceBegan()
         case 651: source.append(response.text)
-        case 652: source.end()
+        case 652:
+            source.end()
+            if source.captions.last?.text.isEmpty == false { health.sourceCompleted(at: Date()) }
         case 653: translation.begin()
-        case 654: translation.append(response.text)
+        case 654:
+            translation.append(response.text)
+            if !response.text.isEmpty { health.translated(at: Date()); firstTranslationDelay = health.lastLatency }
         case 655: translation.end()
         case 350: skipCurrentSpeech = false
         case 352:
@@ -350,7 +427,7 @@ final class InterpreterModel: ObservableObject {
                 if case .dropped = continuation.yield(data) {
                     Task { @MainActor in
                         guard let self, self.generation == run else { return }
-                        self.fail("网络发送积压，已停止同传以避免译音延迟。请检查网络后重试。")
+                        self.serviceFailed("网络发送积压，已停止旧连接以避免延迟累积。")
                     }
                 }
             }, failure: { [weak self] message in
@@ -375,13 +452,16 @@ final class InterpreterModel: ObservableObject {
                     }
                 } catch {
                     guard let self, self.generation == run, !Task.isCancelled else { return }
-                    self.fail(self.describe(error))
+                    self.serviceFailed(self.describe(error))
                 }
             }
             captureWatchdog = Task { [weak self] in
                 while !Task.isCancelled {
                     do { try await Task.sleep(nanoseconds: 1_000_000_000) } catch { return }
                     guard let self, self.generation == run else { return }
+                    if self.phase == .live && !self.localTest && self.automaticFallback && self.health.stalled(at: Date(), suspended: self.micMuted || self.capturePausedForSpeaker || self.playing) {
+                        self.serviceFailed("完整原文已返回，但等待译文超过10秒。"); return
+                    }
                     if self.phase == .live && Date().timeIntervalSince(self.lastCapture) > 3 {
                         self.fail("麦克风音频流已中断，已结束连接。请检查音频设备后重新开始。"); return
                     }
@@ -428,6 +508,26 @@ final class InterpreterModel: ObservableObject {
             self.cleanup(); self.status = "本次同传已结束"
         }
     }
+    private func serviceFailed(_ message: String) {
+        latestFailure = message
+        guard automaticFallback, !localTest, phase != .finishing,
+              let next = FailoverPolicy.destination(current: provider, tried: attempted,
+                  configured: Set(TranslationProvider.allCases.filter { KeychainStore.read(provider: $0) != nil })),
+              let recipe = FailoverPolicy.configuration(for: next, current: configuration, automaticSource: backupSource) else {
+            fail(message); return
+        }
+        if next == .bailian, (try? BailianWire.normalizedHost(bailianHost)) == nil {
+            fail(message + " 备用百炼Host尚未配置，未自动切换。"); return
+        }
+        let old = provider
+        cleanup() // Invalidate all old callbacks and close socket/audio before creating another provider.
+        provider = next; sourceCode = next == .bailian ? "bailian-auto" : recipe.source
+        targetCode = recipe.target; bidirectional = false
+        keySaved = KeychainStore.read(provider: next) != nil
+        pendingSwitchReason = "\(old.title)未就绪或响应过慢，已切换\(next.title)。"
+        switchNotice = pendingSwitchReason
+        startSession(resuming: true)
+    }
     func fail(_ message: String) {
         cleanup(); errorMessage = message; status = "连接已停止"
     }
@@ -445,7 +545,7 @@ final class InterpreterModel: ObservableObject {
     private func describe(_ error: Error) -> String {
         let nsError = error as NSError
         if nsError.domain == NSURLErrorDomain {
-            return "网络连接失败（\(nsError.code)）。请检查网络，以及\(provider.title) API Key、余额和同传服务权限。"
+            return ConnectionFailure(provider: provider, code: nsError.code).localizedDescription
         }
         return error.localizedDescription
     }
