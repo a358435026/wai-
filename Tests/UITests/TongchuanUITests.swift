@@ -101,8 +101,13 @@ final class TongchuanUITests: XCTestCase {
         app.buttons["swapLanguages"].tap()
         let mode = app.switches["subtitlesOnly"]
         XCTAssertEqual(mode.value as? String, "0")
-        mode.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
-        XCTAssertTrue(NSPredicate(format: "value == %@", "1").evaluate(with: mode))
+        waitReady(mode)
+        let before = XCTAttachment(screenshot: app.screenshot())
+        before.name = "Subtitle switch before user interaction"; before.lifetime = .keepAlways; add(before)
+        mode.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5))
+            .withOffset(CGVector(dx: -32, dy: 0)).tap()
+        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "1"), object: mode)
+        XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: 10), .completed, app.debugDescription)
         let pair = XCTAttachment(screenshot: app.screenshot())
         pair.name = "Spanish language selection and subtitle service mode"
         pair.lifetime = .keepAlways; add(pair)

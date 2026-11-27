@@ -84,21 +84,35 @@ struct ContentView: View {
         }.padding(.horizontal, 22).padding(.top, 8).buttonStyle(.plain)
     }
     private var languageBar: some View {
-        HStack(spacing: 2) {
-            Button { showScenes = true } label: {
-                languageCell(title: "说话语言", language: model.sourceLanguage)
-            }.accessibilityLabel("说话语言：\(model.sourceLanguage.name)")
-            Button { model.swapLanguages() } label: {
-                Image(systemName: "arrow.left.arrow.right").font(.body.weight(.medium))
-                    .frame(width: 40, height: 44).background(VoiceTheme.soft, in: RoundedRectangle(cornerRadius: 12))
-            }.disabled(!model.canSwap).accessibilityLabel(model.provider == .bailian ? "自动识别源语言，无需交换" : "交换翻译方向")
-                .accessibilityIdentifier("quickSwapLanguages")
-            Button { showScenes = true } label: {
-                languageCell(title: "译为", language: model.targetLanguage)
-            }.accessibilityLabel(model.translationTitle).accessibilityIdentifier("scenePicker")
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: 8) {
+                    HStack { sourceLanguageButton; swapLanguageButton }
+                    Divider()
+                    targetLanguageButton
+                }
+            } else {
+                HStack(spacing: 2) { sourceLanguageButton; swapLanguageButton; targetLanguageButton }
+            }
         }.padding(7).background(VoiceTheme.surface, in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(VoiceTheme.line, lineWidth: 1))
             .padding(.horizontal, 20).buttonStyle(.plain).disabled(model.active)
+    }
+    private var sourceLanguageButton: some View {
+        Button { showScenes = true } label: { languageCell(title: "说话语言", language: model.sourceLanguage) }
+            .accessibilityLabel("说话语言：\(model.sourceLanguage.name)")
+    }
+    private var targetLanguageButton: some View {
+        Button { showScenes = true } label: { languageCell(title: "译为", language: model.targetLanguage) }
+            .accessibilityLabel(model.translationTitle).accessibilityIdentifier("scenePicker")
+    }
+    private var swapLanguageButton: some View {
+        Button { model.swapLanguages() } label: {
+            Image(systemName: "arrow.left.arrow.right").font(.body.weight(.medium))
+                .frame(minWidth: 44, minHeight: 44).padding(4)
+                .background(VoiceTheme.soft, in: RoundedRectangle(cornerRadius: 12))
+        }.disabled(!model.canSwap).accessibilityLabel(model.provider == .bailian ? "自动识别源语言，无需交换" : "交换翻译方向")
+            .accessibilityIdentifier("quickSwapLanguages")
     }
     private func languageCell(title: String, language: ASTLanguage) -> some View {
         HStack(spacing: 6) {
@@ -153,7 +167,7 @@ struct ContentView: View {
             }
             Button { model.showSettings = true } label: {
                 HStack(spacing: 5) {
-                    Text("\(model.provider.title) · \(model.provider == .bailian ? "自动识别源语言" : "固定翻译方向")")
+                    Text(dynamicTypeSize.isAccessibilitySize ? model.provider.title : "\(model.provider.title) · \(model.provider == .bailian ? "自动识别源语言" : "固定翻译方向")")
                     Image(systemName: "chevron.right").font(.caption2)
                 }.font(.caption).foregroundColor(.secondary).frame(minHeight: 36)
             }.disabled(model.active).accessibilityIdentifier("currentProvider")
