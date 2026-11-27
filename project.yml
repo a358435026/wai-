@@ -8,7 +8,7 @@ settings:
     SWIFT_VERSION: '5.0'
     TARGETED_DEVICE_FAMILY: '1,2'
     MARKETING_VERSION: '0.6.0'
-    CURRENT_PROJECT_VERSION: '18'
+    CURRENT_PROJECT_VERSION: '19'
 targets:
   Tongchuan:
     type: application
@@ -20,6 +20,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.tongchuan.personal
         PRODUCT_NAME: Tongchuan
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: 随声同传
         INFOPLIST_KEY_NSMicrophoneUsageDescription: 用于将你说的话实时翻译成字幕和语音。音频会传至你选择的火山引擎或阿里百炼服务。
