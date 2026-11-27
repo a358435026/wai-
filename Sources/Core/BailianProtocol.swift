@@ -71,6 +71,10 @@ public struct BailianDecoder {
             let error = event["error"] as? [String: Any] ?? [:]
             throw BailianError("百炼服务错误 \(error["code"] ?? "unknown")：\(error["message"] ?? "请检查权限、余额、地域和业务空间。")")
         }
+        if let response = event["response"] as? [String:Any],
+           let status = response["status"] as? String, ["failed", "incomplete"].contains(status) {
+            throw BailianError("百炼本句译文未完成（\(status)）。已停止本次连接，请检查服务状态或稍后重试。")
+        }
         switch kind {
         case "session.updated": return [ASTResponse(event:150)]
         case "session.finished": return [ASTResponse(event:152)]

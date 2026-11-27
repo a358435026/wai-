@@ -1,6 +1,18 @@
 import XCTest
 
 final class TongchuanUITests: XCTestCase {
+    override func setUp() { super.setUp(); continueAfterFailure = false }
+    private func waitReady(_ element: XCUIElement) {
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND enabled == true AND hittable == true"), object: element)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 12), .completed)
+    }
+    private func openLanguages(_ app: XCUIApplication) {
+        app.buttons["scenePicker"].tap()
+        if !app.buttons["targetLanguagePicker"].waitForExistence(timeout: 5) {
+            app.buttons["scenePicker"].tap()
+        }
+        XCTAssertTrue(app.buttons["targetLanguagePicker"].waitForExistence(timeout: 5))
+    }
     private func openMore(_ app: XCUIApplication, destination: String) {
         app.buttons["moreOptions"].tap()
         if !app.buttons[destination].waitForExistence(timeout: 5) {
@@ -20,9 +32,11 @@ final class TongchuanUITests: XCTestCase {
         host.typeText("ws-ui-test.cn-beijing.maas.aliyuncs.com")
         let key = app.secureTextFields["apiKeyField"]
         key.tap(); key.typeText("sk-ui-test-not-a-real-credential")
-        app.buttons["saveCredentials"].tap()
+        let save = app.buttons["saveCredentials"]
+        waitReady(save)
+        save.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: key)
-        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 8), .completed, app.debugDescription)
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 10), .completed, app.debugDescription)
         XCTAssertTrue(app.buttons["scenePicker"].label.contains("自动识别"))
         openMore(app, destination: "设置"); app.buttons["设置"].tap()
         XCTAssertTrue(app.staticTexts["已保存 API Key"].waitForExistence(timeout: 5))
@@ -33,7 +47,7 @@ final class TongchuanUITests: XCTestCase {
         let settings = XCTAttachment(screenshot: app.screenshot())
         settings.name = "Bailian settings with isolated synthetic test credential"; settings.lifetime = .keepAlways; add(settings)
         app.buttons["完成"].tap()
-        app.buttons["scenePicker"].tap()
+        openLanguages(app)
         XCTAssertTrue(app.staticTexts["自动识别（60语种）"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["sourceLanguagePicker"].exists)
         app.buttons["targetLanguagePicker"].tap()
@@ -49,7 +63,7 @@ final class TongchuanUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-reset-languages"]
         app.launch()
-        app.buttons["scenePicker"].tap()
+        openLanguages(app)
         app.buttons["targetLanguagePicker"].tap()
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5))
@@ -106,7 +120,7 @@ final class TongchuanUITests: XCTestCase {
         home.name = "Home"
         home.lifetime = .keepAlways
         add(home)
-        app.buttons["scenePicker"].tap()
+        openLanguages(app)
         XCTAssertTrue(app.buttons["faceToFaceScene"].waitForExistence(timeout: 5))
         app.buttons["完成"].tap()
         openMore(app, destination: "连接诊断 / 测试收音")

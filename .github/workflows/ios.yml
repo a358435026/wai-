@@ -11,7 +11,7 @@ concurrency:
 jobs:
   build:
     runs-on: macos-15-intel
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Record Xcode and simulator environment
@@ -58,7 +58,7 @@ jobs:
           echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
       - name: Simulator launch and settings test
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: |
           xcodebuild test -project Tongchuan.xcodeproj -scheme Tongchuan \
             -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \

@@ -63,7 +63,6 @@ struct SettingsView: View {
                     Text("麦克风音频会实时发送至你选择的\(model.provider.title)。本应用不保存录音，字幕仅保留在当前内存会话中。与豆包 App 无账号关联。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                if let error { Section { Text(error).foregroundStyle(.red) } }
             }
             .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -76,6 +75,9 @@ struct SettingsView: View {
             }
         }.navigationViewStyle(.stack).tint(teal)
             .onChange(of: model.provider) { _ in key = ""; error = nil }
+            .alert("无法保存设置", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+                Button("知道了", role: .cancel) { error = nil }
+            } message: { Text(error ?? "请检查输入后重试。") }
     }
     private func saveAndClose() {
         do { try model.saveKey(key); key = ""; dismiss() }

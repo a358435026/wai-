@@ -73,4 +73,12 @@ final class BailianTests: XCTestCase {
         lane.set(id:"149", text:"corrected", final:true)
         XCTAssertEqual(lane.captions.count,100); XCTAssertEqual(lane.captions.last?.text,"corrected")
     }
+    func testFailedResponseDoesNotLookLikeSuccessfulTranslation() throws {
+        var decoder = BailianDecoder()
+        for status in ["failed", "incomplete"] {
+            let message = try JSONSerialization.data(withJSONObject:["type":"response.done", "response":["status":status]])
+            XCTAssertThrowsError(try decoder.decode(message))
+        }
+        XCTAssertTrue(try decoder.decode(Data(#"{"type":"response.done","response":{"status":"completed"}}"#.utf8)).isEmpty)
+    }
 }
