@@ -1,3 +1,14 @@
+# 0.6.0 build 18 验证 · 2026-11-28
+
+- 应用源码提交 b02d5b37779cee035941450151f2dafa34ebf268。[GitHub Actions 构建](https://github.com/a358435026/wai-/actions/runs/46027997158)。
+- build 18 的 33 项核心测试和 9 项原生界面测试全部通过。测试覆盖供应商选择与凭据隔离、错误提示、词表保存、字幕模式和本机诊断。
+- IPA 为 iPhoneOS arm64，应用标识 app.tongchuan.personal。Info.plist 和可执行文件的最低系统版本均为 iOS 15.0，通过 iOS 15.4.1 安装包校验。
+- IPA 308702 字节，SHA256 e7e0226c7493eafe230bdf46798af270c41d1a21573c239e383575ef3dc09803。构建归档 SHA256 2130e5b092f535fb533dcca2f8a9b91c205564d18cd847e65666b6a595f5f8f0 与 GitHub 一致。两层 ZIP 均通过 CRC 检查，包中未发现本次测试所用的凭据或个人业务空间 Host。
+- 火山新 Key 返回 HTTP 401。此前使用的语音 Key 完成鉴权，携带术语的会话返回 150 / 20000000。百炼返回 session.updated 与 session.finished。两次术语会话都未上传音频。
+- iOS 15.4.1 真机上的弱网切换、译音和术语命中效果仍待覆盖安装后确认。
+
+---
+
 # 0.5.0 build13 最终验证 · 2026-11-27
 
 - 源码提交01ededb8db894069142343af1aa3c99777fcd959；GitHub Actions https://github.com/a358435026/wai-/actions/runs/45997516127 全部成功。
