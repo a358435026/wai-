@@ -225,7 +225,7 @@ final class InterpreterModel: ObservableObject {
     func saveKey(_ value: String) throws {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        guard !trimmed.contains(where: { $0.isWhitespace }), trimmed.count >= 16 else {
+        guard trimmed.unicodeScalars.allSatisfy({ $0.value > 32 && $0.value < 127 }), trimmed.count >= 16 else {
             throw BailianError("请只粘贴完整Key，不要附带说明文字、换行或空格。")
         }
         if provider == .bailian {
