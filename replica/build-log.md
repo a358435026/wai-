@@ -27,3 +27,7 @@ Build9 still did not prove saving/dismissal; several slow-cloud taps also failed
 Build10:25 core and4 existing UI passed. Alert evidence identified actual save failure as Keychain OSStatus -34018 (missing entitlement); earlier keyboard-only inference was insufficient. Build11 signs the simulator test app ad-hoc with an explicit app identifier and default keychain group. iPhone archive remains unsigned for TrollStore; storage is still genuine Keychain, never a plaintext/mock substitution.
 
 0.4.0 build11 final:25 core/5 native UI passed in run45948441660 with genuine signed simulator Keychain. Provider setup/save/isolation/reload and automatic-source/Hindi selection passed. Final iPhone archive remains unsigned, min iOS15.0, build11 and ZIP/no embedded personal credentials or Host checked. English S2S/S2T and Hindi S2S API probes succeeded; phone24k playback remains explicitly unverified.
+
+## 0.5.0 build12
+
+将确认的原生风预览转为SwiftUI，新增语言国旗/自动识别globe、顶部语言条和交换、明确开始结束、真实音量球与滚动字幕、错误恢复、系统深浅色及辅助功能大字布局。保留服务/API/音频/凭据逻辑。新增两项UI场景，待CI。

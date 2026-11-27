@@ -5,6 +5,7 @@ struct LanguageSelectionView: View {
     let options: [ASTLanguage]
     let selected: String
     let showSpeechSupport: Bool
+    var provider: TranslationProvider = .volcengine
     let select: (String) -> Void
     @State private var query = ""
     private var matches: [ASTLanguage] {
@@ -20,7 +21,8 @@ struct LanguageSelectionView: View {
                 Button {
                     select(language.id)
                 } label: {
-                    HStack {
+                    HStack(spacing: 12) {
+                        LanguageEmblem(code: language.id, provider: provider)
                         VStack(alignment: .leading) {
                             Text(language.name).foregroundColor(VoiceTheme.ink)
                             if showSpeechSupport {

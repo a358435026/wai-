@@ -15,3 +15,5 @@ F13,S02,must,true S2T mode and speech capability disclosure,yes,true s2t encodin
 
 F14,S03,must,Bailian provider setup and isolated credentials,yes,native provider Host synthetic Key save isolation and restoration passed genuine signed simulator Keychain
 F15,S01,must,Qwen session lifecycle captions and 24k playback,yes,25 core and native archive passed; English speech/text-only and Hindi speech API probes passed; new phone playback validation pending
+
+F16,S01,must,native conversation layout country emblems dark mode and Dynamic Type,in progress,0.5.0 native build and UI verification pending

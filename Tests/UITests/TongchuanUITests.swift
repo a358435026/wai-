@@ -20,6 +20,31 @@ final class TongchuanUITests: XCTestCase {
         }
         XCTAssertTrue(app.buttons[destination].waitForExistence(timeout: 5))
     }
+    func testNativeHomeProviderAndQuickDirectionSwap() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-reset-languages", "--ui-captions"]
+        app.launch()
+        XCTAssertTrue(app.buttons["currentProvider"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["currentProvider"].label.contains("火山引擎"))
+        let swap = app.buttons["quickSwapLanguages"]
+        XCTAssertTrue(swap.isEnabled)
+        swap.tap()
+        XCTAssertTrue(app.buttons["scenePicker"].label.contains("中文"))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Native home country flags and quick direction swap"
+        shot.lifetime = .keepAlways; add(shot)
+    }
+    func testDarkLargeTextKeepsMainActionReachable() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-reset-languages", "--ui-dark-large", "--ui-captions"]
+        app.launch()
+        let action = app.buttons["mainAction"]
+        waitReady(action)
+        XCTAssertTrue(app.buttons["moreOptions"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Dark mode accessibility text size and fixed primary action"
+        shot.lifetime = .keepAlways; add(shot)
+    }
     func testProviderSetupKeepsKeysSeparateAndShowsAutomaticSource() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-reset-languages"]

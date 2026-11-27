@@ -21,8 +21,10 @@ struct SettingsView: View {
                         TextField("业务空间 API Host（不是 Key）", text: $model.bailianHost)
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
                             .accessibilityIdentifier("bailianHostField").disabled(model.active)
-                        Text("在百炼业务空间管理复制API Host，例如 ws-xxx.cn-beijing.maas.aliyuncs.com。Key与Host必须属于同一业务空间和地域。")
-                            .font(.footnote).foregroundColor(.secondary)
+                        DisclosureGroup("API Host 如何填写？") {
+                            Text("在百炼业务空间管理复制API Host，例如 ws-xxx.cn-beijing.maas.aliyuncs.com。Key与Host必须属于同一业务空间和地域。")
+                                .font(.footnote).foregroundColor(.secondary)
+                        }
                     }
                 }
                 Section {
