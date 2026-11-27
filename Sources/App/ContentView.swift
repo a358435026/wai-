@@ -15,7 +15,7 @@ struct SettingsView: View {
                     Picker("服务商", selection: Binding(get: { model.provider }, set: { model.selectProvider($0) })) {
                         ForEach(TranslationProvider.allCases) { provider in Text(provider.title).tag(provider) }
                     }.pickerStyle(.segmented).accessibilityIdentifier("providerPicker").disabled(model.active)
-                    Text(model.provider == .bailian ? "Qwen 3.8实时同传 · 自动识别源语言 · 24kHz译音" : "豆包AST实时同传 · 指定源语言 · 16kHz译音")
+                    Text(model.provider == .bailian ? "Qwen 3.8实时同传 · 自动识别源语言" : "火山豆包实时同传 · 可指定源语言")
                         .font(.footnote).foregroundColor(.secondary)
                     if model.provider == .bailian {
                         TextField("业务空间 API Host（不是 Key）", text: $model.bailianHost)
@@ -31,10 +31,7 @@ struct SettingsView: View {
                     SecureField(model.keySaved ? "输入新 Key 以替换" : "粘贴\(model.provider.title) API Key", text: $key)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .accessibilityIdentifier("apiKeyField")
-                    Button("保存并返回") {
-                        do { try model.saveKey(key); key = ""; dismiss() }
-                        catch { self.error = error.localizedDescription }
-                    }.disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .submitLabel(.done).onSubmit { saveAndClose() }
                     if model.keySaved {
                         Button("移除本机 API Key", role: .destructive) {
                             do { try model.deleteKey() } catch { self.error = error.localizedDescription }
@@ -69,8 +66,19 @@ struct SettingsView: View {
                 if let error { Section { Text(error).foregroundStyle(.red) } }
             }
             .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("保存并返回") { saveAndClose() }
+                        .disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .accessibilityIdentifier("saveCredentials")
+                }
+                ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } }
+            }
         }.navigationViewStyle(.stack).tint(teal)
             .onChange(of: model.provider) { _ in key = ""; error = nil }
+    }
+    private func saveAndClose() {
+        do { try model.saveKey(key); key = ""; dismiss() }
+        catch { self.error = error.localizedDescription }
     }
 }

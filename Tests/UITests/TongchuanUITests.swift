@@ -20,7 +20,9 @@ final class TongchuanUITests: XCTestCase {
         host.typeText("ws-ui-test.cn-beijing.maas.aliyuncs.com")
         let key = app.secureTextFields["apiKeyField"]
         key.tap(); key.typeText("sk-ui-test-not-a-real-credential")
-        app.buttons["保存并返回"].tap()
+        app.buttons["saveCredentials"].tap()
+        let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: key)
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 8), .completed, app.debugDescription)
         XCTAssertTrue(app.buttons["scenePicker"].label.contains("自动识别"))
         openMore(app, destination: "设置"); app.buttons["设置"].tap()
         XCTAssertTrue(app.staticTexts["已保存 API Key"].waitForExistence(timeout: 5))
