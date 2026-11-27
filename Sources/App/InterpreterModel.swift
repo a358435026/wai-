@@ -109,10 +109,19 @@ final class InterpreterModel: ObservableObject {
             target: targetCode, enabled: terminologyEnabled, customSource: termsSource,
             customTarget: termsTarget, custom: customTerms)
     }
+    private var eligibleBackup: (provider: TranslationProvider, configuration: ASTConfiguration)? {
+        guard automaticFallback, !localTest,
+              let next = FailoverPolicy.destination(current: provider, tried: attempted,
+                  configured: Set(TranslationProvider.allCases.filter { KeychainStore.read(provider: $0) != nil })),
+              let recipe = FailoverPolicy.configuration(for: next, current: configuration, automaticSource: backupSource) else { return nil }
+        if next == .bailian && (try? BailianWire.normalizedHost(bailianHost)) == nil { return nil }
+        return (next, recipe)
+    }
     var fallbackDescription: String {
         let current = configuration
         let next: TranslationProvider = provider == .bailian ? .volcengine : .bailian
         guard KeychainStore.read(provider: next) != nil else { return "备用\(next.title)尚未配置Key；仍可单独使用当前服务。" }
+        if next == .bailian && (try? BailianWire.normalizedHost(bailianHost)) == nil { return "备用百炼API Host尚未配置，不会自动切换。" }
         guard let recipe = FailoverPolicy.configuration(for: next, current: current, automaticSource: backupSource) else {
             return "备用服务不支持当前方向或译音能力，本次不会自动降级或改变目标语言。"
         }
@@ -339,7 +348,7 @@ final class InterpreterModel: ObservableObject {
             } catch { self.fail(error.localizedDescription); return }
             self.client = client
             self.deadlineTask = Task { [weak self] in
-                do { try await Task.sleep(nanoseconds: self?.automaticFallback == true ? 8_000_000_000 : 20_000_000_000) } catch { return }
+                do { try await Task.sleep(nanoseconds: self?.eligibleBackup != nil ? 8_000_000_000 : 20_000_000_000) } catch { return }
                 guard let self, self.generation == run, self.phase == .connecting else { return }
                 self.serviceFailed("\(self.provider.title)连接超时，尚未确认同传会话。")
             }
@@ -459,7 +468,7 @@ final class InterpreterModel: ObservableObject {
                 while !Task.isCancelled {
                     do { try await Task.sleep(nanoseconds: 1_000_000_000) } catch { return }
                     guard let self, self.generation == run else { return }
-                    if self.phase == .live && !self.localTest && self.automaticFallback && self.health.stalled(at: Date(), suspended: self.micMuted || self.capturePausedForSpeaker || self.playing) {
+                    if self.phase == .live && !self.localTest && self.eligibleBackup != nil && self.health.stalled(at: Date(), suspended: self.micMuted || self.capturePausedForSpeaker || self.playing) {
                         self.serviceFailed("完整原文已返回，但等待译文超过10秒。"); return
                     }
                     if self.phase == .live && Date().timeIntervalSince(self.lastCapture) > 3 {
@@ -510,15 +519,8 @@ final class InterpreterModel: ObservableObject {
     }
     private func serviceFailed(_ message: String) {
         latestFailure = message
-        guard automaticFallback, !localTest, phase != .finishing,
-              let next = FailoverPolicy.destination(current: provider, tried: attempted,
-                  configured: Set(TranslationProvider.allCases.filter { KeychainStore.read(provider: $0) != nil })),
-              let recipe = FailoverPolicy.configuration(for: next, current: configuration, automaticSource: backupSource) else {
-            fail(message); return
-        }
-        if next == .bailian, (try? BailianWire.normalizedHost(bailianHost)) == nil {
-            fail(message + " 备用百炼Host尚未配置，未自动切换。"); return
-        }
+        guard phase != .finishing, let backup = eligibleBackup else { fail(message); return }
+        let next = backup.provider; let recipe = backup.configuration
         let old = provider
         cleanup() // Invalidate all old callbacks and close socket/audio before creating another provider.
         provider = next; sourceCode = next == .bailian ? "bailian-auto" : recipe.source
