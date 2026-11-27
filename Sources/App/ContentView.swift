@@ -52,6 +52,11 @@ struct SettingsView: View {
                 } header: { Text("个人自用凭据") } footer: {
                     Text("测试使用当前翻译方向、输出模式和词表。通过后才替换原 Key。测试会短暂建立会话，但不录音、不上传声音。")
                 }
+                Section {
+                    NavigationLink { TerminologySettingsView(model: model) } label: {
+                        Label("外贸专业术语", systemImage: "text.book.closed")
+                    }.accessibilityIdentifier("tradeTerminology")
+                }
                 Section("连接与自动备用") {
                     Toggle("连接失败或译文长时间无响应时切换", isOn: $model.automaticFallback)
                         .disabled(model.active).accessibilityIdentifier("automaticFallback")
@@ -64,11 +69,6 @@ struct SettingsView: View {
                             .font(.footnote).foregroundColor(.secondary)
                     }
                     Text("已保存：\(model.configuredServices.isEmpty ? "暂无" : model.configuredServices)").font(.footnote)
-                }
-                Section {
-                    NavigationLink { TerminologySettingsView(model: model) } label: {
-                        Label("外贸专业术语", systemImage: "text.book.closed")
-                    }.accessibilityIdentifier("tradeTerminology")
                 }
                 Section("本机音频测试") {
                     Button("测试麦克风（不联网）") { dismiss(); model.testMicrophone() }.disabled(model.active)

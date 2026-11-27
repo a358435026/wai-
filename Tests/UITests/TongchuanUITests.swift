@@ -4,7 +4,7 @@ final class TongchuanUITests: XCTestCase {
     override func setUp() { super.setUp(); continueAfterFailure = false }
     private func waitReady(_ element: XCUIElement) {
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND enabled == true AND hittable == true"), object: element)
-        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 12), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 12), .completed, element.debugDescription)
     }
     private func openLanguages(_ app: XCUIApplication) {
         app.buttons["scenePicker"].tap()
@@ -50,21 +50,16 @@ final class TongchuanUITests: XCTestCase {
         app.launchArguments = ["--ui-reset-languages"]
         app.launch()
         openMore(app, destination: "设置"); app.buttons["设置"].tap()
-        var tries = 0
-        while !app.buttons["tradeTerminology"].isHittable && tries < 6 { app.swipeUp(); tries += 1 }
-        XCTAssertTrue(app.buttons["tradeTerminology"].waitForExistence(timeout: 5))
-        app.buttons["tradeTerminology"].tap()
+        openTradeTerms(app)
         let sample = app.buttons["sampleTerms"]
-        if !sample.isHittable { app.swipeUp() }
+        scrollToVisible(sample, in: app)
         waitReady(sample); sample.tap()
         let save = app.buttons["saveTerms"]
         waitReady(save); save.tap()
         let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "已保存"), object: save)
         XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 8), .completed, app.debugDescription)
         app.navigationBars.buttons["设置"].tap()
-        var again = 0
-        while !app.buttons["tradeTerminology"].isHittable && again < 6 { app.swipeUp(); again += 1 }
-        app.buttons["tradeTerminology"].tap()
+        openTradeTerms(app)
         let editor = app.textViews["customTermsEditor"]
         if !editor.isHittable { app.swipeUp() }
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
@@ -72,6 +67,22 @@ final class TongchuanUITests: XCTestCase {
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Editable trade glossary without credentials"
         shot.lifetime = .keepAlways; add(shot)
         // The live connection probe is deliberately not invoked by UI tests.
+    }
+    private func openTradeTerms(_ app: XCUIApplication) {
+        let entry = app.buttons["tradeTerminology"]
+        scrollToVisible(entry, in: app)
+        entry.tap()
+        XCTAssertTrue(app.navigationBars["外贸术语"].waitForExistence(timeout: 8))
+    }
+    private func scrollToVisible(_ element: XCUIElement, in app: XCUIApplication) {
+        let top = app.navigationBars.firstMatch.frame.maxY
+        let bottom = app.frame.maxY - 45
+        for _ in 0..<4 {
+            if element.exists && element.isHittable && element.frame.minY > top && element.frame.maxY < bottom { return }
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.71, dy: 0.74))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.71, dy: 0.42)))
+        }
+        waitReady(element)
     }
     func testAuthenticationErrorOffersDiagnosisWithoutBlamingBalance() {
         let app = XCUIApplication()
