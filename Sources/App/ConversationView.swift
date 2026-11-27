@@ -284,6 +284,12 @@ struct ContentView: View {
     private var diagnostics: some View {
         NavigationView {
             Form {
+                Section {
+                    Button("测试本机麦克风（不联网）") { showDiagnostics = false; model.testMicrophone() }
+                        .disabled(model.active).accessibilityIdentifier("localMicTest")
+                    Text("先验证手机收音，再连接翻译服务。外放使用轮流收说避免回声；戴耳机可同时收听和说话。")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
                 Section("当前会话") {
                     LabeledContentCompat("服务商", model.provider.title)
                     LabeledContentCompat("译音采样率", model.provider == .bailian ? "24 kHz" : "16 kHz")
@@ -304,12 +310,6 @@ struct ContentView: View {
                     LabeledContentCompat("音频已发送包数", String(model.sentPackets))
                     LabeledContentCompat("收到译音字节", String(model.receivedAudioBytes))
                     LabeledContentCompat("播放设备", model.route)
-                }
-                Section {
-                    Button("测试本机麦克风（不联网）") { showDiagnostics = false; model.testMicrophone() }
-                        .disabled(model.active).accessibilityIdentifier("localMicTest")
-                    Text("先验证手机收音，再连接翻译服务。外放使用轮流收说避免回声；戴耳机可同时收听和说话。")
-                        .font(.footnote).foregroundColor(.secondary)
                 }
                 Section { Text("每个完整音频包约 80 毫秒。诊断不含 API Key 或录音。当前版本需保持应用在前台。") }
             }.navigationTitle("连接诊断").navigationBarTitleDisplayMode(.inline)

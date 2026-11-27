@@ -95,13 +95,17 @@ final class InterpreterModel: ObservableObject {
     var translationTitle: String {
         bidirectional ? "中英互译（测试）" : "\(sourceLanguage.shortName) → \(targetLanguage.shortName)"
     }
-    var producesSpeech: Bool { configuration.mode == .speechToSpeech }
+    private var outputMode: ASTMode {
+        if provider == .bailian { return subtitlesOnly || !targetLanguage.defaultSpeech ? .subtitles : .speechToSpeech }
+        if bidirectional { return subtitlesOnly ? .subtitles : .speechToSpeech }
+        return ASTLanguages.mode(target: targetCode, subtitlesOnly: subtitlesOnly)
+    }
+    var producesSpeech: Bool { outputMode == .speechToSpeech }
     var canSwap: Bool { provider == .volcengine && !bidirectional && ASTLanguages.target(sourceCode) != nil }
     var configuration: ASTConfiguration {
         ASTConfiguration(source: provider == .bailian ? "bailian-auto" : bidirectional ? "zhen" : sourceCode,
                          target: bidirectional ? "zhen" : targetCode,
-                         mode: provider == .bailian ? (subtitlesOnly || !targetLanguage.defaultSpeech ? .subtitles : .speechToSpeech) : bidirectional ? (subtitlesOnly ? .subtitles : .speechToSpeech)
-                            : ASTLanguages.mode(target: targetCode, subtitlesOnly: subtitlesOnly),
+                         mode: outputMode,
                          glossary: (try? glossary()) ?? [:])
     }
     private func glossary() throws -> [String: String] {

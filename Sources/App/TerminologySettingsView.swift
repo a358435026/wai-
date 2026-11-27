@@ -34,8 +34,7 @@ struct TerminologySettingsView: View {
                     .accessibilityIdentifier("importTerms")
                 Button("填入示例（会替换编辑内容）") { model.termsSource = "zh"; model.termsTarget = "en"; draft = TradeTerminology.examples; saved = false }.disabled(model.active)
                     .accessibilityIdentifier("sampleTerms")
-                Button("保存词表") { save() }.disabled(model.active).accessibilityIdentifier("saveTerms")
-                if saved { Label("词表已保存，下次连接生效", systemImage: "checkmark.circle").font(.footnote) }
+                if saved { Label("词表已保存，下次连接生效", systemImage: "checkmark.circle").font(.footnote).accessibilityIdentifier("savedTermsStatus") }
                 Text("最多100条自定义词、32KB。文件需为UTF-8，可用两列CSV（含引号）、Tab文本，或JSON对象。自定义词优先于内置词；精确型号、参数和单位建议由你校对。术语是模型指导，不能保证每次强制命中。")
                     .font(.footnote).foregroundColor(.secondary)
             }
@@ -45,6 +44,12 @@ struct TerminologySettingsView: View {
                     .font(.footnote).foregroundColor(.secondary)
             }
         }.navigationTitle("外贸术语").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(saved ? "已保存" : "保存") { save() }
+                        .disabled(model.active || saved).accessibilityIdentifier("saveTerms")
+                }
+            }
             .onAppear { if !loaded { draft = model.customTerms; loaded = true } }
             .onChange(of: draft) { _ in saved = false }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.commaSeparatedText, .tabSeparatedText, .plainText, .json]) { result in

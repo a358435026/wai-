@@ -58,9 +58,17 @@ final class TongchuanUITests: XCTestCase {
         if !sample.isHittable { app.swipeUp() }
         waitReady(sample); sample.tap()
         let save = app.buttons["saveTerms"]
-        if !save.isHittable { app.swipeUp() }
-        save.tap()
-        XCTAssertTrue(app.staticTexts["词表已保存，下次连接生效"].waitForExistence(timeout: 5))
+        waitReady(save); save.tap()
+        let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "已保存"), object: save)
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 8), .completed, app.debugDescription)
+        app.navigationBars.buttons["设置"].tap()
+        var again = 0
+        while !app.buttons["tradeTerminology"].isHittable && again < 6 { app.swipeUp(); again += 1 }
+        app.buttons["tradeTerminology"].tap()
+        let editor = app.textViews["customTermsEditor"]
+        if !editor.isHittable { app.swipeUp() }
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertTrue((editor.value as? String ?? "").contains("rated power"))
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Editable trade glossary without credentials"
         shot.lifetime = .keepAlways; add(shot)
         // The live connection probe is deliberately not invoked by UI tests.
