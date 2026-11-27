@@ -7,7 +7,7 @@ import zipfile
 root = Path(__file__).resolve().parents[1]
 allowed = ['Sources', 'Protocol', 'Tests', '.github', 'tools', 'replica']
 files = [p for folder in allowed for p in (root / folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts]
-files += [root / name for name in ['Package.swift', 'project.yml', '.gitignore', 'README.md', 'INSTALL.md', 'VALIDATION.md']]
+files += [root / name for name in ['Package.swift', 'project.yml', '.gitignore', 'README.md', 'INSTALL.md', 'VALIDATION.md', 'DESIGN.md']]
 output = root.parent / 'tongchuan-ios-source.zip'
 with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
     for path in sorted(files):

@@ -1,3 +1,18 @@
+# 0.5.0 build13 最终验证 · 2026-11-27
+
+- 源码提交01ededb8db894069142343af1aa3c99777fcd959；GitHub Actions https://github.com/a358435026/wai-/actions/runs/45997516127 全部成功。
+- 25核心测试及7原生UI用例全部通过，0失败。覆盖字幕显示/隐藏、深色辅助功能大字、首页语言交换、凭据保存与两家隔离、目标语言搜索与真正仅字幕模式、语音状态显示、本机收音诊断入口。
+- 已目视检查最终原生截图：国旗及双语字幕、普通字号首页、深色大字上下语言条、仅字幕开关开启及对应说明、百炼配置隔离。截图及UI输入均为合成测试数据，不能作为真机音频证明。
+- build12曾25核心/6项UI通过，旧点按坐标未使仅字幕开关变为1；build13保留用例，校准控件点按位置并等待状态，开关及首页模式提示均验证通过。同时修复首轮截图中的大字英文拆行。
+- iPhone IPA：0.5.0 build13、app.tongchuan.personal、ARM64/iPhoneOS，Info.plist最低15.0、Mach-O最低15.0.0，按iOS15.4.1门禁通过；248924字节。
+- IPA SHA256：3d85d2b824bb4e18e97a4ad4d54e5e3ffb89b79876bf1bc6848b105e4117a98a。
+- artifact ZIP SHA256：6d71ad9d2fab87f476e02b8c4d89a52183c4807a8fe5cbf6ea445820abc6fa8f，与GitHub一致。
+- UI ZIP SHA256：27fc6a5687e92d7333a6934ae8238a0dc624f7a93f4ed6993d307835a47c7830，与GitHub一致。所有ZIP CRC、build13及未内置个人Host/Key检查通过。
+- ASTClient、TranslationClient、InterpreterModel、AudioIO、PCMInputQueue、KeychainStore保持原有实现；本轮未调用真实付费API。用户此前已在0.2.1确认实际收音与翻译播报，0.4.0做过百炼代表性电脑API验证；新版手机收音、耳机与长时网络仍需覆盖安装后验收。
+- 模拟器使用专属adhoc签名验证真实Keychain；设备IPA仍未签名，供TrollStore安装。旧0.4.0 IPA与源码归档保留。
+
+---
+
 # 0.4.0 build11 最终验证 · 2026-11-27
 
 - 应用提交9fef6fdb5ec9bc9e8645a45fcea2bde55cc65b1d；成功构建：https://github.com/a358435026/wai-/actions/runs/45948441660。
