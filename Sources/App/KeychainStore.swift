@@ -2,13 +2,13 @@ import Foundation
 import Security
 
 enum KeychainStore {
-    private static var query: [String: Any] {
+    private static func query(_ provider: TranslationProvider) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: "app.tongchuan.volcengine",
+         kSecAttrService as String: provider == .bailian ? "app.tongchuan.bailian" : "app.tongchuan.volcengine",
          kSecAttrAccount as String: "personal-api-key"]
     }
-    static func read() -> String? {
-        var request = query
+    static func read(provider: TranslationProvider = .volcengine) -> String? {
+        var request = query(provider)
         request[kSecReturnData as String] = true
         request[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
@@ -16,19 +16,19 @@ enum KeychainStore {
               let data = result as? Data else { return nil }
         return String(data: data, encoding: .utf8)
     }
-    static func save(_ key: String) throws {
+    static func save(_ key: String, provider: TranslationProvider = .volcengine) throws {
         let attributes: [String: Any] = [
             kSecValueData as String: Data(key.utf8),
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
-        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        let status = SecItemUpdate(query(provider) as CFDictionary, attributes as CFDictionary)
         if status == errSecItemNotFound {
-            let added = SecItemAdd(query.merging(attributes) { _, new in new } as CFDictionary, nil)
+            let added = SecItemAdd(query(provider).merging(attributes) { _, new in new } as CFDictionary, nil)
             guard added == errSecSuccess else { throw StoreError.status(added) }
         } else if status != errSecSuccess { throw StoreError.status(status) }
     }
-    static func delete() throws {
-        let status = SecItemDelete(query as CFDictionary)
+    static func delete(provider: TranslationProvider = .volcengine) throws {
+        let status = SecItemDelete(query(provider) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw StoreError.status(status) }
     }
     enum StoreError: LocalizedError {

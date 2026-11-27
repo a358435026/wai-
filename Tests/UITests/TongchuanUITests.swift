@@ -8,6 +8,41 @@ final class TongchuanUITests: XCTestCase {
         }
         XCTAssertTrue(app.buttons[destination].waitForExistence(timeout: 5))
     }
+    func testProviderSetupKeepsKeysSeparateAndShowsAutomaticSource() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-reset-languages"]
+        app.launch()
+        openMore(app, destination: "设置"); app.buttons["设置"].tap()
+        app.buttons["阿里百炼"].tap()
+        let host = app.textFields["bailianHostField"]
+        XCTAssertTrue(host.waitForExistence(timeout: 5))
+        host.tap()
+        host.typeText("ws-ui-test.cn-beijing.maas.aliyuncs.com")
+        let key = app.secureTextFields["apiKeyField"]
+        key.tap(); key.typeText("sk-ui-test-not-a-real-credential")
+        app.buttons["保存并返回"].tap()
+        XCTAssertTrue(app.buttons["scenePicker"].label.contains("自动识别"))
+        openMore(app, destination: "设置"); app.buttons["设置"].tap()
+        XCTAssertTrue(app.staticTexts["已保存 API Key"].waitForExistence(timeout: 5))
+        app.buttons["火山引擎"].tap()
+        XCTAssertTrue(app.staticTexts["尚未配置 API Key"].waitForExistence(timeout: 5))
+        app.buttons["阿里百炼"].tap()
+        XCTAssertTrue(app.staticTexts["已保存 API Key"].waitForExistence(timeout: 5))
+        let settings = XCTAttachment(screenshot: app.screenshot())
+        settings.name = "Bailian settings with isolated synthetic test credential"; settings.lifetime = .keepAlways; add(settings)
+        app.buttons["完成"].tap()
+        app.buttons["scenePicker"].tap()
+        XCTAssertTrue(app.staticTexts["自动识别（60语种）"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["sourceLanguagePicker"].exists)
+        app.buttons["targetLanguagePicker"].tap()
+        let search = app.searchFields.firstMatch; search.tap(); search.typeText("hi")
+        app.buttons["language-hi"].tap()
+        let languages = XCTAttachment(screenshot: app.screenshot())
+        languages.name = "Bailian automatic source and Hindi spoken output"; languages.lifetime = .keepAlways; add(languages)
+        app.buttons["完成"].tap()
+        XCTAssertTrue(app.buttons["scenePicker"].label.contains("印地语"))
+        XCTAssertFalse(app.staticTexts["outputModeHint"].exists)
+    }
     func testSearchLanguageSwapAndTrueSubtitlesMode() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-reset-languages"]

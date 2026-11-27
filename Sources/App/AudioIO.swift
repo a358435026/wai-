@@ -26,8 +26,13 @@ final class AudioIO {
     private var playbackGeneration = UUID()
     private var pendingPCM = Data()
     private(set) var pendingSamples = 0
-    private let outputFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000,
-                                             channels: 1, interleaved: false)!
+    private let outputFormat: AVAudioFormat
+    private let outputRate: Double
+    init(outputRate: Double = 16000) {
+        self.outputRate = outputRate
+        outputFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: outputRate,
+                                    channels: 1, interleaved: false)!
+    }
     var onPlaybackChanged: ((Bool) -> Void)?
     var isPlaying: Bool { pendingSamples > 0 }
 
@@ -62,7 +67,7 @@ final class AudioIO {
         pendingPCM.append(data)
         let count = pendingPCM.count / 2
         guard count > 0 else { return }
-        guard pendingSamples + count <= 16000 * 20 else { throw AudioError.playbackOverflow }
+        guard pendingSamples + count <= Int(outputRate * 20) else { throw AudioError.playbackOverflow }
         guard let buffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: AVAudioFrameCount(count)),
               let samples = buffer.floatChannelData?[0] else { throw AudioError.format }
         buffer.frameLength = AVAudioFrameCount(count)

@@ -111,6 +111,13 @@ public struct ASTResponse: Equatable, Sendable {
     public let statusCode: Int
     public let message: String
     public let sessionID: String
+    public var captionID: String = ""
+    public var final: Bool = false
+    public init(event: Int, text: String = "", audio: Data = Data(), captionID: String = "", final: Bool = false) {
+        self.event = event; self.text = text; self.audio = audio
+        self.captionID = captionID; self.final = final
+        statusCode = 0; message = ""; sessionID = ""
+    }
     public init(data: Data) throws {
         let fields = try ProtoWire.decode(data)
         func bytes(_ number: Int) -> Data { fields.last { $0.number == number }?.bytes ?? Data() }

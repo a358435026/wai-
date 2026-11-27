@@ -31,6 +31,7 @@ public struct Caption: Identifiable, Equatable, Sendable {
 
 public struct CaptionLane: Sendable {
     public private(set) var captions: [Caption] = []
+    private var remoteIDs: [String: UUID] = [:]
     public init() {}
     public mutating func begin() {
         if let last = captions.last, !last.final, last.text.isEmpty { return }
@@ -45,5 +46,17 @@ public struct CaptionLane: Sendable {
     }
     public mutating func end() {
         if !captions.isEmpty { captions[captions.count - 1].final = true }
+    }
+    // Qwen completion replaces the full item, rather than appending it twice.
+    public mutating func set(id: String, text: String, final: Bool) {
+        if let uuid = remoteIDs[id], let index = captions.firstIndex(where: { $0.id == uuid }) {
+            captions[index].text = text; captions[index].final = final
+        } else {
+            let caption = Caption(text: text, final: final)
+            remoteIDs[id] = caption.id; captions.append(caption)
+        }
+        if captions.count > 100 { captions.removeFirst(captions.count - 100) }
+        let retained = Set(captions.map(\.id))
+        remoteIDs = remoteIDs.filter { retained.contains($0.value) }
     }
 }

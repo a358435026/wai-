@@ -42,7 +42,7 @@ struct ContentView: View {
                 }
                 statusArea
                 controls
-                Text("随声同传 · AI 译音").font(.caption).foregroundColor(VoiceTheme.muted)
+                Text("随声同传 · \(model.provider.title)").font(.caption).foregroundColor(VoiceTheme.muted)
                     .padding(.bottom, 10)
             }
             .padding(.horizontal, VoiceTheme.spacing)
@@ -198,6 +198,9 @@ struct ContentView: View {
         NavigationView {
             Form {
                 Section("翻译语言") {
+                    if model.provider == .bailian {
+                        HStack { Text("源语言"); Spacer(); Text("自动识别（60语种）").foregroundColor(.secondary) }
+                    } else {
                     NavigationLink(isActive: $sourcePickerOpen) {
                         LanguageSelectionView(title: "源语言", options: ASTLanguages.sources,
                             selected: model.sourceCode, showSpeechSupport: false) { code in
@@ -206,6 +209,7 @@ struct ContentView: View {
                     } label: {
                         HStack { Text("源语言"); Spacer(); Text(model.sourceLanguage.name).foregroundColor(.secondary) }
                     }.accessibilityIdentifier("sourceLanguagePicker")
+                    }
                     NavigationLink(isActive: $targetPickerOpen) {
                         LanguageSelectionView(title: "目标语言", options: model.availableTargets,
                             selected: model.targetCode, showSpeechSupport: true) { code in
@@ -214,10 +218,12 @@ struct ContentView: View {
                     } label: {
                         HStack { Text("目标语言"); Spacer(); Text(model.targetLanguage.name).foregroundColor(.secondary) }
                     }.accessibilityIdentifier("targetLanguagePicker")
+                    if model.provider == .volcengine {
                     Button { model.swapLanguages() } label: {
                         Label("交换源语言与目标语言", systemImage: "arrow.up.arrow.down")
                     }.disabled(!model.canSwap).accessibilityIdentifier("swapLanguages")
-                    Text("当前接口要求至少一端为中文或英语。方言仅作为输入；中英混合识别只能译成中文或英语。")
+                    }
+                    Text(model.provider == .bailian ? "百炼自动识别源语言。60种译入语言中29种可播报；其余自动仅字幕。" : "当前接口要求至少一端为中文或英语。方言仅作为输入；中英混合识别只能译成中文或英语。")
                         .font(.footnote).foregroundColor(.secondary)
                 }
                 Section("输出方式") {
@@ -231,6 +237,12 @@ struct ContentView: View {
                             .font(.footnote).foregroundColor(.secondary)
                     }
                 }
+                if model.provider == .bailian {
+                    Section("常用译入语言") {
+                        Button("译为英语") { model.selectTarget("en") }
+                        Button("译为中文") { model.selectTarget("zh") }
+                    }
+                } else {
                 Section("常用方向") {
                     Button { model.selectPair(source: "zh", target: "en") } label: {
                         Label("中文译为英语", systemImage: "person.2")
@@ -246,6 +258,7 @@ struct ContentView: View {
                             .font(.footnote).foregroundColor(.secondary)
                     }
                 }
+                }
                 Section { Text("切换语言或输出方式前需要结束当前会话。会记住上次选择的语言与字幕模式。")
                     .font(.footnote).foregroundColor(.secondary) }
             }.navigationTitle("语言与输出").navigationBarTitleDisplayMode(.inline)
@@ -256,6 +269,8 @@ struct ContentView: View {
         NavigationView {
             Form {
                 Section("当前会话") {
+                    LabeledContentCompat("服务商", model.provider.title)
+                    LabeledContentCompat("译音采样率", model.provider == .bailian ? "24 kHz" : "16 kHz")
                     LabeledContentCompat("状态", model.status)
                     LabeledContentCompat("翻译方向", model.translationTitle)
                     LabeledContentCompat("服务模式", model.producesSpeech ? "字幕与译音 S2S" : "仅字幕 S2T")

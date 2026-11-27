@@ -11,10 +11,24 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
+                Section("同传服务") {
+                    Picker("服务商", selection: Binding(get: { model.provider }, set: { model.selectProvider($0) })) {
+                        ForEach(TranslationProvider.allCases) { provider in Text(provider.title).tag(provider) }
+                    }.pickerStyle(.segmented).accessibilityIdentifier("providerPicker").disabled(model.active)
+                    Text(model.provider == .bailian ? "Qwen 3.8实时同传 · 自动识别源语言 · 24kHz译音" : "豆包AST实时同传 · 指定源语言 · 16kHz译音")
+                        .font(.footnote).foregroundColor(.secondary)
+                    if model.provider == .bailian {
+                        TextField("业务空间 API Host（不是 Key）", text: $model.bailianHost)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                            .accessibilityIdentifier("bailianHostField").disabled(model.active)
+                        Text("在百炼业务空间管理复制API Host，例如 ws-xxx.cn-beijing.maas.aliyuncs.com。Key与Host必须属于同一业务空间和地域。")
+                            .font(.footnote).foregroundColor(.secondary)
+                    }
+                }
                 Section {
                     Label(model.keySaved ? "已保存 API Key" : "尚未配置 API Key",
                           systemImage: model.keySaved ? "checkmark.shield" : "key")
-                    SecureField(model.keySaved ? "输入新 Key 以替换" : "粘贴火山引擎 API Key", text: $key)
+                    SecureField(model.keySaved ? "输入新 Key 以替换" : "粘贴\(model.provider.title) API Key", text: $key)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .accessibilityIdentifier("apiKeyField")
                     Button("保存并返回") {
@@ -27,7 +41,7 @@ struct SettingsView: View {
                         }
                     }
                 } header: { Text("个人自用凭据") } footer: {
-                    Text("Key 仅存入本机钥匙串，不写入项目、日志或普通设置。请使用已开通同声传译服务的 Key，调用按火山引擎规则计费。")
+                    Text("两家Key分别保存在本机钥匙串，切换服务不会覆盖另一家的Key。本客户端供个人自用，不内置凭据；调用由当前服务商计费。")
                 }
                 Section("本机音频测试") {
                     Button("测试麦克风（不联网）") { dismiss(); model.testMicrophone() }.disabled(model.active)
@@ -47,9 +61,9 @@ struct SettingsView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("服务与隐私") {
-                    Link("开通同传服务 / API Key 管理", destination: URL(string: "https://console.volcengine.com/speech/new/setting/apikeys?projectName=default")!)
-                    Link("官方同声传译文档", destination: URL(string: "https://docs.volcengine.com/docs/doubao-voice/simultaneous-interpretation?lang=zh")!)
-                    Text("麦克风音频会实时发送至火山引擎。本应用不保存录音，字幕仅保留在当前内存会话中。与豆包 App 无账号关联。")
+                    Link("开通同传服务 / API Key 管理", destination: URL(string: model.provider == .bailian ? "https://bailian.console.aliyun.com/cn-beijing/settings/api-key" : "https://console.volcengine.com/speech/new/setting/apikeys?projectName=default")!)
+                    Link("官方同声传译文档", destination: URL(string: model.provider == .bailian ? "https://help.aliyun.com/zh/model-studio/livetranslate-realtime-websocket-access" : "https://docs.volcengine.com/docs/doubao-voice/simultaneous-interpretation?lang=zh")!)
+                    Text("麦克风音频会实时发送至你选择的\(model.provider.title)。本应用不保存录音，字幕仅保留在当前内存会话中。与豆包 App 无账号关联。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
@@ -57,5 +71,6 @@ struct SettingsView: View {
             .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } } }
         }.navigationViewStyle(.stack).tint(teal)
+            .onChange(of: model.provider) { _ in key = ""; error = nil }
     }
 }

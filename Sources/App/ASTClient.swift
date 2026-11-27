@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-final class ASTClient {
+final class ASTClient: TranslationClient {
     static let endpoint = URL(string: "wss://openspeech.bytedance.com/api/v4/ast/v2/translate")!
     let sessionID = UUID().uuidString
     private let session: URLSession

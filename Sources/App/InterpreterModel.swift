@@ -33,9 +33,13 @@ final class InterpreterModel: ObservableObject {
     @Published var playbackEnabled = true {
         didSet { if !playbackEnabled { audio?.clearPlayback() } }
     }
-    @Published var keySaved = KeychainStore.read() != nil
+    @Published private(set) var provider: TranslationProvider = .volcengine
+    @Published var bailianHost = UserDefaults.standard.string(forKey: "bailian.host") ?? "" {
+        didSet { UserDefaults.standard.set(bailianHost, forKey: "bailian.host") }
+    }
+    @Published var keySaved = false
     @Published var showSettings = false
-    private var client: ASTClient?
+    private var client: (any TranslationClient)?
     private var audio: AudioIO?
     private var streamContinuation: AsyncStream<Data>.Continuation?
     private var sendTask: Task<Void, Never>?
@@ -56,22 +60,22 @@ final class InterpreterModel: ObservableObject {
     private var observers: [NSObjectProtocol] = []
     private var generation = UUID()
     var active: Bool { phase != .idle }
-    var sourceLanguage: ASTLanguage { ASTLanguages.source(sourceCode)! }
-    var targetLanguage: ASTLanguage { ASTLanguages.target(targetCode)! }
-    var availableTargets: [ASTLanguage] { ASTLanguages.targets(for: sourceCode) }
+    var sourceLanguage: ASTLanguage { provider == .bailian ? BailianLanguages.automatic : ASTLanguages.source(sourceCode)! }
+    var targetLanguage: ASTLanguage { provider == .bailian ? BailianLanguages.target(targetCode)! : ASTLanguages.target(targetCode)! }
+    var availableTargets: [ASTLanguage] { provider == .bailian ? BailianLanguages.targets : ASTLanguages.targets(for: sourceCode) }
     var translationTitle: String {
         bidirectional ? "中英互译（测试）" : "\(sourceLanguage.shortName) → \(targetLanguage.shortName)"
     }
     var producesSpeech: Bool { configuration.mode == .speechToSpeech }
-    var canSwap: Bool { !bidirectional && ASTLanguages.target(sourceCode) != nil }
+    var canSwap: Bool { provider == .volcengine && !bidirectional && ASTLanguages.target(sourceCode) != nil }
     var configuration: ASTConfiguration {
         ASTConfiguration(source: bidirectional ? "zhen" : sourceCode,
                          target: bidirectional ? "zhen" : targetCode,
-                         mode: bidirectional ? (subtitlesOnly ? .subtitles : .speechToSpeech)
+                         mode: provider == .bailian ? (subtitlesOnly || !targetLanguage.defaultSpeech ? .subtitles : .speechToSpeech) : bidirectional ? (subtitlesOnly ? .subtitles : .speechToSpeech)
                             : ASTLanguages.mode(target: targetCode, subtitlesOnly: subtitlesOnly))
     }
     func selectSource(_ code: String) {
-        guard !active, ASTLanguages.source(code) != nil else { return }
+        guard provider == .volcengine, !active, ASTLanguages.source(code) != nil else { return }
         bidirectional = false; sourceCode = code
         if ASTLanguages.validationError(source: code, target: targetCode) != nil {
             targetCode = code == "zh" ? "en" : "zh"
@@ -79,11 +83,11 @@ final class InterpreterModel: ObservableObject {
         persistLanguages()
     }
     func selectTarget(_ code: String) {
-        guard !active, ASTLanguages.validationError(source: sourceCode, target: code) == nil else { return }
+        guard !active, availableTargets.contains(where: { $0.id == code }) else { return }
         bidirectional = false; targetCode = code; persistLanguages()
     }
     func selectPair(source: String, target: String) {
-        guard !active, ASTLanguages.validationError(source: source, target: target) == nil else { return }
+        guard provider == .volcengine, !active, ASTLanguages.validationError(source: source, target: target) == nil else { return }
         bidirectional = false; sourceCode = source; targetCode = target; persistLanguages()
     }
     func swapLanguages() {
@@ -91,24 +95,43 @@ final class InterpreterModel: ObservableObject {
         selectPair(source: targetCode, target: sourceCode)
     }
     func selectBidirectional() {
-        guard !active else { return }
+        guard provider == .volcengine, !active else { return }
         selectPair(source: "zh", target: "en"); bidirectional = true
     }
     private func persistLanguages() {
-        UserDefaults.standard.set(sourceCode, forKey: "translation.source")
-        UserDefaults.standard.set(targetCode, forKey: "translation.target")
+        UserDefaults.standard.set(sourceCode, forKey: "translation.\(provider.rawValue).source")
+        UserDefaults.standard.set(targetCode, forKey: "translation.\(provider.rawValue).target")
     }
-
-    init() {
-        let savedSource = UserDefaults.standard.string(forKey: "translation.source") ?? "zh"
-        let savedTarget = UserDefaults.standard.string(forKey: "translation.target") ?? "en"
-        if ASTLanguages.validationError(source: savedSource, target: savedTarget) == nil {
-            sourceCode = savedSource; targetCode = savedTarget
+    func selectProvider(_ value: TranslationProvider) {
+        guard !active, value != provider else { return }
+        provider = value
+        UserDefaults.standard.set(value.rawValue, forKey: "translation.provider")
+        restoreLanguages(); keySaved = KeychainStore.read(provider: provider) != nil
+        clearCaptions()
+    }
+    private func restoreLanguages() {
+        let defaults = UserDefaults.standard
+        if provider == .bailian {
+            sourceCode = "bailian-auto"
+            let saved = defaults.string(forKey: "translation.bailian.target") ?? "en"
+            targetCode = BailianLanguages.target(saved) != nil ? saved : "en"
+        } else {
+            let input = defaults.string(forKey: "translation.volcengine.source") ?? defaults.string(forKey: "translation.source") ?? "zh"
+            let output = defaults.string(forKey: "translation.volcengine.target") ?? defaults.string(forKey: "translation.target") ?? "en"
+            sourceCode = ASTLanguages.validationError(source: input, target: output) == nil ? input : "zh"
+            targetCode = ASTLanguages.validationError(source: input, target: output) == nil ? output : "en"
         }
+        bidirectional = false
+    }
+    init() {
+        provider = TranslationProvider(rawValue: UserDefaults.standard.string(forKey: "translation.provider") ?? "") ?? .volcengine
+        restoreLanguages()
+        keySaved = KeychainStore.read(provider: provider) != nil
         subtitlesOnly = UserDefaults.standard.bool(forKey: "translation.subtitlesOnly")
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-languages") {
-            sourceCode = "zh"; targetCode = "en"; subtitlesOnly = false
+            provider = .volcengine; sourceCode = "zh"; targetCode = "en"; subtitlesOnly = false
+            keySaved = KeychainStore.read(provider: provider) != nil
         }
         if ProcessInfo.processInfo.arguments.contains("--ui-speaking") {
             playing = true; outputLevel = 0.7
@@ -151,10 +174,14 @@ final class InterpreterModel: ObservableObject {
     func saveKey(_ value: String) throws {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        try KeychainStore.save(trimmed)
+        if provider == .bailian {
+            bailianHost = try BailianWire.normalizedHost(bailianHost)
+            guard trimmed.hasPrefix("sk-"), !trimmed.contains("*") else { throw BailianError("请填写完整的百炼 API Key。") }
+        }
+        try KeychainStore.save(trimmed, provider: provider)
         keySaved = true
     }
-    func deleteKey() throws { try KeychainStore.delete(); keySaved = false }
+    func deleteKey() throws { try KeychainStore.delete(provider: provider); keySaved = false }
     func clearCaptions() { source = CaptionLane(); translation = CaptionLane(); errorMessage = nil }
     func interruptPlayback() { skipCurrentSpeech = true; audio?.clearPlayback() }
 
@@ -196,10 +223,14 @@ final class InterpreterModel: ObservableObject {
 
     func start() {
         guard phase == .idle else { return }
-        if !bidirectional, let error = ASTLanguages.validationError(source: sourceCode, target: targetCode) {
+        if provider == .volcengine, !bidirectional, let error = ASTLanguages.validationError(source: sourceCode, target: targetCode) {
             errorMessage = error; return
         }
-        guard let key = KeychainStore.read(), !key.isEmpty else { showSettings = true; return }
+        if provider == .bailian {
+            do { bailianHost = try BailianWire.normalizedHost(bailianHost) }
+            catch { errorMessage = error.localizedDescription; showSettings = true; return }
+        }
+        guard let key = KeychainStore.read(provider: provider), !key.isEmpty else { showSettings = true; return }
         clearCaptions(); micMuted = false
         resetAudioStats(); localTest = false; skipCurrentSpeech = false
         phase = .connecting; status = "正在申请麦克风并连接"
@@ -227,14 +258,21 @@ final class InterpreterModel: ObservableObject {
             guard self.capturedPackets > 0 else {
                 self.fail(self.captureFailureDescription); return
             }
-            self.status = "正在连接火山引擎"
-            let client = ASTClient(onResponse: { [weak self] response in
+            self.status = "正在连接\(self.provider.title)"
+            let onResponse: (ASTResponse) -> Void = { [weak self] response in
                 guard let self, self.generation == run else { return }
                 self.receive(response)
-            }, onError: { [weak self] error in
+            }
+            let onError: (Error) -> Void = { [weak self] error in
                 guard let self, self.generation == run else { return }
                 self.fail(self.describe(error))
-            })
+            }
+            let client: any TranslationClient
+            do {
+                if self.provider == .bailian {
+                    client = try BailianClient(host: self.bailianHost, onResponse: onResponse, onError: onError)
+                } else { client = ASTClient(onResponse: onResponse, onError: onError) }
+            } catch { self.fail(error.localizedDescription); return }
             self.client = client
             self.deadlineTask = Task { [weak self] in
                 do { try await Task.sleep(nanoseconds: 20_000_000_000) } catch { return }
@@ -258,6 +296,8 @@ final class InterpreterModel: ObservableObject {
             phase = .live; status = "正在聆听"
             lastCapture = Date()
             UIApplication.shared.isIdleTimerDisabled = true
+        case 660: source.set(id: response.captionID, text: response.text, final: response.final)
+        case 661: translation.set(id: response.captionID, text: response.text, final: response.final)
         case 650: source.begin()
         case 651: source.append(response.text)
         case 652: source.end()
@@ -279,7 +319,7 @@ final class InterpreterModel: ObservableObject {
         let run = generation
         let stream = AsyncStream<Data>(bufferingPolicy: .bufferingOldest(16)) { self.streamContinuation = $0 }
         let continuation = streamContinuation!
-        let audio = AudioIO()
+        let audio = AudioIO(outputRate: provider.outputRate)
         self.audio = audio
         audio.onPlaybackChanged = { [weak self] value in
             guard let self else { return }
@@ -405,7 +445,7 @@ final class InterpreterModel: ObservableObject {
     private func describe(_ error: Error) -> String {
         let nsError = error as NSError
         if nsError.domain == NSURLErrorDomain {
-            return "网络连接失败（\(nsError.code)）。请检查网络，以及火山引擎 API Key、余额和同传服务权限。"
+            return "网络连接失败（\(nsError.code)）。请检查网络，以及\(provider.title) API Key、余额和同传服务权限。"
         }
         return error.localizedDescription
     }

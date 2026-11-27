@@ -6,9 +6,9 @@ public struct ASTLanguage: Identifiable, Equatable, Sendable {
     public let shortName: String
     public let dialect: Bool
     public let defaultSpeech: Bool
-    init(_ id: String, _ name: String, short: String? = nil, dialect: Bool = false) {
+    init(_ id: String, _ name: String, short: String? = nil, dialect: Bool = false, speech: Bool? = nil) {
         self.id = id; self.name = name; shortName = short ?? name; self.dialect = dialect
-        defaultSpeech = Self.speechCodes.contains(id)
+        defaultSpeech = speech ?? Self.speechCodes.contains(id)
     }
     private static let speechCodes: Set<String> = ["zh", "en", "es", "pt", "de", "fr", "id", "ja",
         "ru", "it", "ko", "ar", "ms", "th", "vi", "fil"]
