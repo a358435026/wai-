@@ -144,6 +144,7 @@ struct ContentView: View {
         if model.playing { return "正在播报 · 点击打断" }
         if model.localTest && model.phase == .live { return "对着手机说话，观察声音变化" }
         if model.phase == .live { return model.micMuted ? "麦克风已静音" : "正在聆听" }
+        if model.active { return model.status }
         if !model.keySaved { return "先配置 API Key" }
         return model.status
     }
@@ -156,6 +157,8 @@ struct ContentView: View {
                 Spacer()
                 Button("连接诊断") { showDiagnostics = true }
             }.font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+            Button("检查服务和 Key") { model.showSettings = true }
+                .font(.subheadline.weight(.semibold)).disabled(model.active)
         }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
             .background(VoiceTheme.surface, in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.red.opacity(0.35), lineWidth: 1))
@@ -178,14 +181,16 @@ struct ContentView: View {
             .background(VoiceTheme.background).overlay(alignment: .top) { VoiceTheme.line.frame(height: 1) }
     }
     private var mainAction: some View {
-        Button { if model.active { model.stop() } else { model.start() } } label: {
+        let title = model.phase == .connecting ? "取消连接" : model.active ? "结束同传" : "开始同传"
+        return Button { if model.active { model.stop() } else { model.start() } } label: {
             HStack(spacing: 8) {
-                Image(systemName: model.active ? "stop.fill" : "waveform")
-                Text(model.active ? "结束同传" : "开始同传").fontWeight(.semibold)
+                if model.phase == .connecting { ProgressView().tint(VoiceTheme.onAccent) }
+                else { Image(systemName: model.active ? "stop.fill" : "waveform") }
+                Text(title).fontWeight(.semibold)
             }.font(.body).frame(maxWidth: .infinity, minHeight: 54)
                 .foregroundColor(VoiceTheme.onAccent)
                 .background(VoiceTheme.accent, in: RoundedRectangle(cornerRadius: 15))
-        }.accessibilityLabel(model.active ? "结束同传" : "开始同传")
+        }.accessibilityLabel(title)
             .accessibilityIdentifier("mainAction").disabled(model.phase == .finishing).buttonStyle(.plain)
     }
     private var micControl: some View {

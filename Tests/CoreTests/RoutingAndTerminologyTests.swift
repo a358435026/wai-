@@ -66,6 +66,20 @@ final class RoutingAndTerminologyTests: XCTestCase {
             XCTAssertThrowsError(try TradeTerminology.parse(bad))
         }
     }
+    func testGeneralTradeTermsAndAutomaticSourceWithCustomTermsAtLimit() throws {
+        let forward = TradeTerminology.preset(source: "zh", target: "en")
+        XCTAssertEqual(forward["信用证"], "letter of credit")
+        XCTAssertEqual(forward["商品编码"], "HS code")
+        XCTAssertEqual(forward["船上交货"], "FOB")
+        let automatic = TradeTerminology.preset(source: "bailian-auto", target: "en")
+        XCTAssertLessThanOrEqual(automatic.count, 100)
+        XCTAssertEqual(automatic["船上交货"], "FOB")
+        XCTAssertEqual(automatic["bicicleta eléctrica"], "electric bicycle")
+        let custom = (0..<100).map { "词\($0)\tterm \($0)" }.joined(separator: "\n")
+        let combined = try TradeTerminology.combined(source: "bailian-auto", target: "en", enabled: true,
+            customSource: "zh", customTarget: "en", custom: custom)
+        XCTAssertEqual(combined, try TradeTerminology.parse(custom))
+    }
     func testBothProvidersReceiveTheDocumentedGlossarySchema() throws {
         let config = ASTConfiguration(glossary: ["交货期":"lead time"])
         let fixtureURL = try XCTUnwrap(Bundle.module.url(forResource: "terms-start", withExtension: "hex", subdirectory: "Fixtures"))

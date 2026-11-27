@@ -14,7 +14,7 @@ struct TerminologySettingsView: View {
             Section {
                 Toggle("启用外贸术语", isOn: $model.terminologyEnabled).disabled(model.active)
                     .accessibilityIdentifier("terminologyEnabled")
-                Text("内置30组电动车与外贸常用术语，支持中、英、葡、西互译。其他语种可导入自己的词。下次连接时随请求交给当前服务，译音也由服务生成；无需另下载模型。")
+                Text("内置 \(TradeTerminology.builtInCount) 组术语，覆盖报价、账款、贸易条款、单证、物流和电动车。支持中、英、葡、西，其他语种可导入自定义词。")
                     .font(.footnote).foregroundColor(.secondary)
             }
             Section("自定义词表的方向") {

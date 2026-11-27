@@ -45,7 +45,7 @@ final class InterpreterModel: ObservableObject {
     @Published var backupSource = UserDefaults.standard.string(forKey: "routing.source") ?? "zh" {
         didSet { UserDefaults.standard.set(backupSource, forKey: "routing.source") }
     }
-    @Published var terminologyEnabled = UserDefaults.standard.bool(forKey: "terms.enabled") {
+    @Published var terminologyEnabled = UserDefaults.standard.object(forKey: "terms.enabled") as? Bool ?? true {
         didSet { UserDefaults.standard.set(terminologyEnabled, forKey: "terms.enabled") }
     }
     @Published var customTerms = UserDefaults.standard.string(forKey: "terms.text") ?? "" {
@@ -249,6 +249,10 @@ final class InterpreterModel: ObservableObject {
         }
         try KeychainStore.save(trimmed, provider: provider)
         keySaved = true
+        if !active {
+            errorMessage = nil
+            status = "准备就绪"
+        }
     }
     func deleteKey() throws { try KeychainStore.delete(provider: provider); keySaved = false }
     func clearCaptions() { source = CaptionLane(); translation = CaptionLane(); errorMessage = nil }
@@ -306,7 +310,12 @@ final class InterpreterModel: ObservableObject {
             do { bailianHost = try BailianWire.normalizedHost(bailianHost) }
             catch { errorMessage = error.localizedDescription; showSettings = true; return }
         }
-        guard let key = KeychainStore.read(provider: provider), !key.isEmpty else { showSettings = true; return }
+        guard let key = KeychainStore.read(provider: provider), !key.isEmpty else {
+            keySaved = false
+            serviceFailed("\(provider.title)尚未保存可用的 API Key。")
+            if phase == .idle { showSettings = true }
+            return
+        }
         if !resuming { clearCaptions() }
         else { source.end(); translation.end(); errorMessage = nil }
         micMuted = false

@@ -6,7 +6,7 @@ final class ProviderConnectionProbe {
     private var continuation: CheckedContinuation<String, Error>?
     private var timer: Task<Void, Never>?
     private var finishing = false
-    func run(provider: TranslationProvider, key: String, host: String) async throws -> String {
+    func run(provider: TranslationProvider, key: String, host: String, configuration: ASTConfiguration) async throws -> String {
         try await withTaskCancellationHandler(operation: {
             try await withCheckedThrowingContinuation { continuation in
                 self.continuation = continuation
@@ -22,7 +22,7 @@ final class ProviderConnectionProbe {
                 }
                 Task { [weak self] in
                     guard let self else { return }
-                    do { try await self.client?.connect(key: key, configuration: ASTConfiguration(mode: .subtitles)) }
+                    do { try await self.client?.connect(key: key, configuration: configuration) }
                     catch { self.complete(.failure(error)) }
                 }
             }
@@ -41,7 +41,7 @@ final class ProviderConnectionProbe {
                 }
                 catch { self?.complete(.failure(error)) }
             }
-        } else if response.event == 152 || response.event == 151 {
+        } else if finishing && (response.event == 152 || response.event == 151) {
             complete(.success("鉴权与同传会话测试通过；测试会话已关闭。未录音，未上传音频。"))
         }
     }

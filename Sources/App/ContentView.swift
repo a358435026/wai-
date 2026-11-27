@@ -18,13 +18,13 @@ struct SettingsView: View {
                 Section("同传服务") {
                     Picker("服务商", selection: Binding(get: { model.provider }, set: { model.selectProvider($0) })) {
                         ForEach(TranslationProvider.allCases) { provider in Text(provider.title).tag(provider) }
-                    }.pickerStyle(.segmented).accessibilityIdentifier("providerPicker").disabled(model.active)
+                    }.pickerStyle(.segmented).accessibilityIdentifier("providerPicker").disabled(model.active || testing)
                     Text(model.provider == .bailian ? "Qwen 3.8实时同传 · 自动识别源语言" : "火山豆包实时同传 · 可指定源语言")
                         .font(.footnote).foregroundColor(.secondary)
                     if model.provider == .bailian {
                         TextField("业务空间 API Host（不是 Key）", text: $model.bailianHost)
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
-                            .accessibilityIdentifier("bailianHostField").disabled(model.active)
+                            .accessibilityIdentifier("bailianHostField").disabled(model.active || testing)
                         DisclosureGroup("API Host 如何填写？") {
                             Text("在百炼业务空间管理复制API Host，例如 ws-xxx.cn-beijing.maas.aliyuncs.com。Key与Host必须属于同一业务空间和地域。")
                                 .font(.footnote).foregroundColor(.secondary)
@@ -37,21 +37,22 @@ struct SettingsView: View {
                     SecureField(model.keySaved ? "输入新 Key 以替换" : "粘贴\(model.provider.title) API Key", text: $key)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .accessibilityIdentifier("apiKeyField")
-                        .submitLabel(.done).onSubmit { saveAndClose() }
+                        .disabled(model.active || testing)
+                        .submitLabel(.done).onSubmit { testConnection() }
+                    Button(testing ? "正在测试…" : key.isEmpty ? "测试当前连接（不录音）" : "测试并保存新 Key") { testConnection() }
+                        .disabled(testing || model.active).accessibilityIdentifier("testProviderConnection")
+                    if !probeResult.isEmpty {
+                        Text(probeResult).font(.footnote).textSelection(.enabled).accessibilityIdentifier("connectionTestResult")
+                    }
                     if model.keySaved {
                         Button("移除本机 API Key", role: .destructive) {
                             do { try model.deleteKey() } catch { self.error = error.localizedDescription }
-                        }
+                        }.disabled(model.active || testing)
                     }
                 } header: { Text("个人自用凭据") } footer: {
-                    Text("两家Key分别保存在本机钥匙串，切换服务不会覆盖另一家的Key。本客户端供个人自用，不内置凭据；调用由当前服务商计费。")
+                    Text("测试使用当前翻译方向、输出模式和词表。通过后才替换原 Key。测试会短暂建立会话，但不录音、不上传声音。")
                 }
                 Section("连接与自动备用") {
-                    Button(testing ? "正在测试…" : "测试当前服务连接（不录音）") { testConnection() }
-                        .disabled(testing || model.active).accessibilityIdentifier("testProviderConnection")
-                    if !probeResult.isEmpty { Text(probeResult).font(.footnote).textSelection(.enabled) }
-                    Text("保存Key仅代表本机保存成功，不代表鉴权通过。连接测试不录音、不上传声音；会创建并关闭一次短会话，具体费用按服务商规则。")
-                        .font(.footnote).foregroundColor(.secondary)
                     Toggle("连接失败或译文长时间无响应时切换", isOn: $model.automaticFallback)
                         .disabled(model.active).accessibilityIdentifier("automaticFallback")
                     if model.automaticFallback {
@@ -96,8 +97,8 @@ struct SettingsView: View {
             .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("保存并返回") { saveAndClose() }
-                        .disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("离线保存") { saveAndClose() }
+                        .disabled(model.active || testing || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .accessibilityIdentifier("saveCredentials")
                 }
                 ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } }
@@ -113,18 +114,28 @@ struct SettingsView: View {
             } message: { Text(error ?? "请检查输入后重试。") }
     }
     private func testConnection() {
+        guard !testing, !model.active else { return }
         let value = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let credential = value.isEmpty ? KeychainStore.read(provider: model.provider) : value,
               !credential.isEmpty else { error = "请先粘贴或保存当前服务的Key。"; return }
         testing = true; probeResult = ""
-        let provider = model.provider; let host = model.bailianHost
+        let provider = model.provider
+        let host = model.bailianHost
+        let configuration = model.configuration
         let check = ProviderConnectionProbe(); probe = check
         probeTask = Task {
             do {
-                let result = try await check.run(provider: provider, key: credential, host: host)
-                if !Task.isCancelled && model.provider == provider { probeResult = provider.title + "：" + result }
+                let result = try await check.run(provider: provider, key: credential, host: host, configuration: configuration)
+                guard !Task.isCancelled, model.provider == provider else { return }
+                if !value.isEmpty {
+                    try model.saveKey(credential)
+                    key = ""
+                }
+                probeResult = provider.title + "：" + result + (value.isEmpty ? "" : " 新 Key 已保存。")
             } catch {
-                if !Task.isCancelled && model.provider == provider { probeResult = provider.title + "：" + error.localizedDescription }
+                if !Task.isCancelled && model.provider == provider {
+                    probeResult = provider.title + "：" + error.localizedDescription + (value.isEmpty ? "" : " 新 Key 未保存。")
+                }
             }
             if !Task.isCancelled { testing = false }
         }
