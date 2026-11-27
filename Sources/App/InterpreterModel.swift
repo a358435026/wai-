@@ -62,6 +62,7 @@ final class InterpreterModel: ObservableObject {
     @Published private(set) var firstTranslationDelay: Double?
     @Published private(set) var handshakeMilliseconds: Int?
     private var attempted: Set<TranslationProvider> = []
+    private var sessionOutputMode: ASTMode?
     private var health = TranslationHealth()
     private var connectionStarted = Date()
     private var latestSourceItem = ""
@@ -96,6 +97,7 @@ final class InterpreterModel: ObservableObject {
         bidirectional ? "中英互译（测试）" : "\(sourceLanguage.shortName) → \(targetLanguage.shortName)"
     }
     private var outputMode: ASTMode {
+        if let sessionOutputMode { return sessionOutputMode }
         if provider == .bailian { return subtitlesOnly || !targetLanguage.defaultSpeech ? .subtitles : .speechToSpeech }
         if bidirectional { return subtitlesOnly ? .subtitles : .speechToSpeech }
         return ASTLanguages.mode(target: targetCode, subtitlesOnly: subtitlesOnly)
@@ -527,6 +529,7 @@ final class InterpreterModel: ObservableObject {
         let next = backup.provider; let recipe = backup.configuration
         let old = provider
         cleanup() // Invalidate all old callbacks and close socket/audio before creating another provider.
+        sessionOutputMode = recipe.mode
         provider = next; sourceCode = next == .bailian ? "bailian-auto" : recipe.source
         targetCode = recipe.target; bidirectional = false
         keySaved = KeychainStore.read(provider: next) != nil
@@ -538,6 +541,7 @@ final class InterpreterModel: ObservableObject {
         cleanup(); errorMessage = message; status = "连接已停止"
     }
     private func cleanup() {
+        sessionOutputMode = nil
         generation = UUID()
         deadlineTask?.cancel(); drainTask?.cancel(); connectionTask?.cancel(); captureWatchdog?.cancel()
         audio?.shutdown(); audio = nil
