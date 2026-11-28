@@ -96,9 +96,10 @@ final class TongchuanUITests: XCTestCase {
         let bilingual = app.buttons["中英自动互译 · 火山"]
         XCTAssertTrue(bilingual.waitForExistence(timeout: 5))
         bilingual.tap()
-        XCTAssertTrue(app.staticTexts["bilingualDirection"].waitForExistence(timeout: 5))
+        let direction = app.buttons["bilingualDirection"]
+        XCTAssertTrue(direction.waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons["mainAction"].label, "开始同传")
-        modes.tap()
+        direction.tap()
         let multilingual = app.buttons["多语自动对话 · 百炼"]
         XCTAssertTrue(multilingual.waitForExistence(timeout: 5))
         multilingual.tap()

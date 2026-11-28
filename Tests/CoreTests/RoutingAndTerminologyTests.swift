@@ -2,6 +2,20 @@ import XCTest
 @testable import TongchuanCore
 
 final class RoutingAndTerminologyTests: XCTestCase {
+    #if canImport(NaturalLanguage)
+    func testReplyLanguageFollowsArabicAndSpanishWithoutServerMetadata() {
+        var routing = ConversationTurnRouting()
+        for (sentence, expected) in [("كم سعر هذه الدراجة؟", "ar"), ("Cuál es el precio de este triciclo eléctrico?", "es")] {
+            let options: Set<String> = ["ar", "es", "en"]
+            XCTAssertEqual(routing.route(text: sentence, hypotheses: ConversationTurnRouting.languageHypotheses(for: sentence),
+                                         fallback: "en", supported: options), "zh")
+            let reply = "这款电动三轮车的价格可以商量。"
+            XCTAssertEqual(routing.route(text: reply, hypotheses: ConversationTurnRouting.languageHypotheses(for: reply),
+                                         fallback: "en", supported: options), expected)
+        }
+    }
+    #endif
+
     func testDialogueFollowsLatestConfidentForeignTurnAndKeepsQueuedDirection() {
         var routing = ConversationTurnRouting()
         let supported: Set<String> = ["ar", "es", "en"]

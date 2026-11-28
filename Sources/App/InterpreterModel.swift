@@ -596,7 +596,7 @@ final class InterpreterModel: ObservableObject {
         guard !sentence.isEmpty, let translator = turnTranslator,
               finalizedTurns.insert(id).inserted else { return }
         let target = turnRouting.route(text: sentence, providerLanguage: providerLanguage,
-            hypotheses: BailianTextTranslation.languageHypotheses(for: sentence),
+            hypotheses: ConversationTurnRouting.languageHypotheses(for: sentence),
             fallback: targetCode, supported: BailianTextTranslation.replyCodes)
         if detectedReplyCode != turnRouting.lastForeignLanguage {
             detectedReplyCode = turnRouting.lastForeignLanguage

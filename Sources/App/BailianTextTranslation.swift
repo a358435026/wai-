@@ -1,8 +1,10 @@
 import Foundation
-import NaturalLanguage
 
 struct BailianTextTranslation {
-    static let replyCodes: Set<String> = ["en", "es", "pt", "de", "fr", "ru", "ja", "ko", "it", "ar", "th", "id", "vi", "tr", "nl", "hi"]
+    static let replyCodes: Set<String> = [
+        "en", "es", "pt", "de", "fr", "ru", "ja", "ko", "it", "ar", "th", "id", "vi", "tr", "nl", "hi",
+        "ms", "ur", "nb", "sv", "da", "he", "fi", "pl", "is", "cs", "fa"
+    ]
     private let endpoint: URL
     private let key: String
     private let session = URLSession(configuration: .ephemeral)
@@ -11,14 +13,6 @@ struct BailianTextTranslation {
         let validated = try BailianWire.normalizedHost(host)
         endpoint = URL(string: "https://\(validated)/compatible-mode/v1/chat/completions")!
         self.key = key
-    }
-
-    static func languageHypotheses(for text: String) -> [String: Double] {
-        let recognizer = NLLanguageRecognizer()
-        recognizer.processString(text)
-        return Dictionary(uniqueKeysWithValues: recognizer.languageHypotheses(withMaximum: 3).map {
-            ($0.key.rawValue, $0.value)
-        })
     }
 
     func translate(_ text: String, to target: String, terms: [String: String]) async throws -> String {

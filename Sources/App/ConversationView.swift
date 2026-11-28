@@ -102,12 +102,12 @@ struct ContentView: View {
             if model.bidirectional {
                 Button { showConversationModes = true } label: {
                     HStack(spacing: 8) {
-                        Text("中英 ↔ 中英").accessibilityIdentifier("bilingualDirection")
+                        Text("中英 ↔ 中英")
                         Image(systemName: "chevron.down").font(.caption)
                     }
                     .font(.headline).frame(maxWidth: .infinity, minHeight: 48)
                     .contentShape(Rectangle())
-                }.disabled(model.active)
+                }.disabled(model.active).accessibilityIdentifier("bilingualDirection")
             } else if dynamicTypeSize.isAccessibilitySize {
                 VStack(spacing: 8) {
                     HStack { sourceLanguageButton; swapLanguageButton }

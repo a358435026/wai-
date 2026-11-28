@@ -1,9 +1,22 @@
 import Foundation
+#if canImport(NaturalLanguage)
+import NaturalLanguage
+#endif
 
 public struct ConversationTurnRouting {
     public private(set) var lastForeignLanguage: String?
 
     public init() {}
+
+    #if canImport(NaturalLanguage)
+    public static func languageHypotheses(for text: String) -> [String: Double] {
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(text)
+        return Dictionary(uniqueKeysWithValues: recognizer.languageHypotheses(withMaximum: 3).map {
+            ($0.key.rawValue, $0.value)
+        })
+    }
+    #endif
 
     public mutating func route(text: String, providerLanguage: String? = nil, hypotheses: [String: Double],
                                fallback: String, supported: Set<String>) -> String {
@@ -26,6 +39,9 @@ public struct ConversationTurnRouting {
         } else if let tag, tag != "zh", supported.contains(tag), enoughText,
                   serverTag != nil || (confidence >= 0.55 && margin >= 0.18) {
             lastForeignLanguage = tag
+        } else if serverTag == nil, tag == nil || tag == "ar", supported.contains("ar"),
+                  wordCount >= 2, text.contains("ة"), text.contains("ال") {
+            lastForeignLanguage = "ar"
         }
         return "zh"
     }
