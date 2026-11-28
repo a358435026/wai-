@@ -12,7 +12,7 @@ def version(value):
     return tuple((list(map(int, value.split('.'))) + [0, 0])[:3])
 
 
-def verify(path, maximum, expected):
+def verify(path, maximum, expected, check_privacy=False):
     with zipfile.ZipFile(path) as archive:
         assert archive.testzip() is None, 'IPA ZIP checksum failure'
         plists = [name for name in archive.namelist()
@@ -22,6 +22,8 @@ def verify(path, maximum, expected):
         info = plistlib.loads(archive.read(plist_path))
         assert info['CFBundleShortVersionString'] == expected, 'Unexpected release version'
         assert version(info['MinimumOSVersion']) <= version(maximum), 'Info.plist minimum OS too high'
+        if check_privacy:
+            verify_privacy(archive, plist_path.rsplit('/', 1)[0], info)
         binary = archive.read(plist_path.rsplit('/', 1)[0] + '/' + info['CFBundleExecutable'])
         magic, cpu, _, _, commands = struct.unpack_from('<IIIII', binary)
         assert magic == 0xfeedfacf and cpu == 0x100000c, 'Expected thin ARM64 Mach-O'
@@ -44,10 +46,29 @@ def verify(path, maximum, expected):
             'bytes': path.stat().st_size, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
+def verify_privacy(archive, app_path, info):
+    manifest = plistlib.loads(archive.read(f'{app_path}/PrivacyInfo.xcprivacy'))
+    assert manifest['NSPrivacyTracking'] is False, 'Unexpected tracking declaration'
+    assert manifest['NSPrivacyTrackingDomains'] == [], 'Unexpected tracking domains'
+    reasons = {entry['NSPrivacyAccessedAPIType']: entry['NSPrivacyAccessedAPITypeReasons']
+               for entry in manifest['NSPrivacyAccessedAPITypes']}
+    assert 'CA92.1' in reasons['NSPrivacyAccessedAPICategoryUserDefaults']
+    declarations = {item['NSPrivacyCollectedDataType']: item for item in manifest['NSPrivacyCollectedDataTypes']}
+    for data_type in ('AudioData', 'OtherUserContent'):
+        item = declarations['NSPrivacyCollectedDataType' + data_type]
+        assert item['NSPrivacyCollectedDataTypeLinked'] is True
+        assert item['NSPrivacyCollectedDataTypeTracking'] is False
+        assert item['NSPrivacyCollectedDataTypePurposes'] == ['NSPrivacyCollectedDataTypePurposeAppFunctionality']
+    assert info['ITSAppUsesNonExemptEncryption'] is False
+    assert info['UIApplicationSceneManifest']['UIApplicationSupportsMultipleScenes'] is False
+    assert 'zh-Hans' in info['CFBundleLocalizations']
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('ipa', type=Path)
     parser.add_argument('--max-minimum-ios', required=True)
     parser.add_argument('--expected-version', required=True)
+    parser.add_argument('--check-privacy', action='store_true')
     args = parser.parse_args()
-    print(json.dumps(verify(args.ipa, args.max_minimum_ios, args.expected_version), indent=2))
+    print(json.dumps(verify(args.ipa, args.max_minimum_ios, args.expected_version, args.check_privacy), indent=2))
