@@ -121,9 +121,12 @@ public struct ASTResponse: Equatable, Sendable {
     public let sessionID: String
     public var captionID: String = ""
     public var final: Bool = false
-    public init(event: Int, text: String = "", audio: Data = Data(), captionID: String = "", final: Bool = false) {
+    public var sourceLanguage: String?
+    public init(event: Int, text: String = "", audio: Data = Data(), captionID: String = "",
+                final: Bool = false, sourceLanguage: String? = nil) {
         self.event = event; self.text = text; self.audio = audio
         self.captionID = captionID; self.final = final
+        self.sourceLanguage = sourceLanguage
         statusCode = 0; message = ""; sessionID = ""
     }
     public init(data: Data) throws {

@@ -41,9 +41,10 @@ final class BailianTests: XCTestCase {
             #"{"type":"conversation.item.input_audio_transcription.delta","item_id":"a","delta":"你"}"#,
             #"{"type":"conversation.item.input_audio_transcription.delta","item_id":"b","delta":"再见"}"#,
             #"{"type":"conversation.item.input_audio_transcription.delta","item_id":"a","delta":"好"}"#,
-            #"{"type":"conversation.item.input_audio_transcription.completed","item_id":"a","transcript":"你好。"}"#]
+            #"{"type":"conversation.item.input_audio_transcription.completed","item_id":"a","transcript":"你好。","language":"zh"}"#]
         for event in events {
             let response = try XCTUnwrap(decoder.decode(Data(event.utf8)).first)
+            XCTAssertEqual(response.sourceLanguage, response.final ? "zh" : nil)
             lane.set(id:response.captionID, text:response.text, final:response.final)
         }
         XCTAssertEqual(lane.captions.map(\.text), ["你好。","再见"])

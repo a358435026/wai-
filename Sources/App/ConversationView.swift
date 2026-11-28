@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var quickLanguagePicker: LanguageField?
     @State private var pendingQuickLanguage: String?
     @State private var confirmListening = false
+    @State private var showConversationModes = false
     @State private var sourcePickerOpen = false
     @State private var targetPickerOpen = false
     @State private var showDiagnostics = false
@@ -98,7 +99,16 @@ struct ContentView: View {
     }
     private var languageBar: some View {
         Group {
-            if dynamicTypeSize.isAccessibilitySize {
+            if model.bidirectional {
+                Button { showConversationModes = true } label: {
+                    HStack(spacing: 8) {
+                        Text("中英 ↔ 中英")
+                        Image(systemName: "chevron.down").font(.caption)
+                    }
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 48)
+                    .contentShape(Rectangle())
+                }.disabled(model.active).accessibilityIdentifier("bilingualDirection")
+            } else if dynamicTypeSize.isAccessibilitySize {
                 VStack(spacing: 8) {
                     HStack { sourceLanguageButton; swapLanguageButton }
                     Divider()
@@ -120,7 +130,11 @@ struct ContentView: View {
             .disabled(model.provider == .bailian || !canPickLanguage)
     }
     private var targetLanguageButton: some View {
-        Button { quickLanguagePicker = .target } label: { languageCell(title: "译为", language: model.targetLanguage) }
+        Button { quickLanguagePicker = .target } label: {
+            languageCell(title: model.multilingualConversation
+                ? (model.detectedReplyCode == nil ? "默认回复语言" : "中文回复跟随") : "译为",
+                language: model.multilingualConversation ? model.replyLanguage : model.targetLanguage)
+        }
             .accessibilityLabel(model.translationTitle).accessibilityIdentifier("scenePicker")
             .disabled(!canPickLanguage)
     }
@@ -154,7 +168,7 @@ struct ContentView: View {
         let choices = field == .source ? ASTLanguages.sources : model.availableTargets
         return NavigationView {
             LanguageSelectionView(title: field == .source ? "说话语言" : "目标语言",
-                options: choices, selected: selected, showSpeechSupport: field == .target,
+                options: choices, selected: selected, showSpeechSupport: field == .target && !model.multilingualConversation,
                 provider: model.provider) { code in
                     if code == selected && !model.bidirectional { quickLanguagePicker = nil; return }
                     if model.active { pendingQuickLanguage = code }
@@ -186,6 +200,7 @@ struct ContentView: View {
             if model.phase == .connecting || model.phase == .finishing { ProgressView() }
             if model.localTest { Text("本机麦克风测试 · 不联网") }
             if !model.switchNotice.isEmpty { Text(model.switchNotice).accessibilityIdentifier("switchNotice") }
+            if !model.conversationNotice.isEmpty { Text(model.conversationNotice) }
             if let delay = model.firstTranslationDelay { Text(String(format: "原文完成至首译 %.1f 秒", delay)) }
             if model.micMuted && model.active { Text("麦克风已静音，会话仍可能计费") }
             if model.readsChineseOnFinish && !model.localTest {
@@ -203,13 +218,43 @@ struct ContentView: View {
         }.font(.caption).foregroundColor(.secondary).multilineTextAlignment(.center)
     }
     private var listeningControls: some View {
-        HStack {
-            if model.listenChinese {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Button { showConversationModes = true } label: {
+                    HStack {
+                        Label(model.bidirectional ? "中英自动互译" : model.multilingualConversation ? "多语自动对话" : "选择对话模式",
+                              systemImage: "arrow.left.arrow.right")
+                        Spacer()
+                        Image(systemName: "chevron.down").font(.caption)
+                    }
+                    .padding(.horizontal, 10).frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background(VoiceTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                .disabled(model.active)
+                .accessibilityIdentifier("conversationMode")
+                .confirmationDialog("对话模式", isPresented: $showConversationModes, titleVisibility: .visible) {
+                    Button("中英自动互译 · 火山") { model.selectBidirectional() }
+                    Button("多语自动对话 · 百炼") { model.selectMultilingualConversation() }
+                    Button("固定方向") { model.selectFixedDirection() }
+                    Button("取消", role: .cancel) {}
+                }
+            }
+            if model.bidirectional {
+                Text("火山自动互译支持中英。其他语言可选多语自动对话或固定方向。")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else if model.multilingualConversation {
+                Text("外语译成中文。中文回复跟随最近识别的外语，识别前使用默认语言。")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else if model.listenChinese {
+              HStack {
                 Button("回到说中文") { model.exitChineseListening() }.disabled(model.active)
                 Spacer()
                 Toggle("听完再播", isOn: $model.deferChineseSpeech)
                     .fixedSize().disabled(model.active || model.subtitlesOnly)
                     .accessibilityIdentifier("deferChineseSpeech")
+              }
             } else {
                 Button {
                     if model.active { confirmListening = true }
@@ -217,7 +262,6 @@ struct ContentView: View {
                 } label: {
                     Label("听外语 → 中文", systemImage: "ear")
                 }.disabled(!canPickLanguage).accessibilityIdentifier("listenChinese")
-                Spacer()
             }
         }.font(.subheadline).padding(.horizontal, 24)
     }
@@ -254,7 +298,7 @@ struct ContentView: View {
             }
             Button { model.showSettings = true } label: {
                 HStack(spacing: 5) {
-                    Text(dynamicTypeSize.isAccessibilitySize ? model.provider.title : "\(model.provider.title) · \(model.provider == .bailian ? "自动识别源语言" : "固定翻译方向")")
+                    Text(dynamicTypeSize.isAccessibilitySize ? model.provider.title : "\(model.provider.title) · \(model.bidirectional || model.multilingualConversation ? "自动对话" : model.provider == .bailian ? "自动识别源语言" : "固定翻译方向")")
                     Image(systemName: "chevron.right").font(.caption2)
                 }.font(.caption).foregroundColor(.secondary).frame(minHeight: 36)
             }.disabled(model.active).accessibilityIdentifier("currentProvider")
@@ -315,7 +359,7 @@ struct ContentView: View {
                     }
                     NavigationLink(isActive: $targetPickerOpen) {
                         LanguageSelectionView(title: "目标语言", options: model.availableTargets,
-                            selected: model.targetCode, showSpeechSupport: true, provider: model.provider) { code in
+                            selected: model.targetCode, showSpeechSupport: !model.multilingualConversation, provider: model.provider) { code in
                                 model.selectTarget(code); targetPickerOpen = false
                             }
                     } label: {
@@ -332,7 +376,10 @@ struct ContentView: View {
                 Section("输出方式") {
                     Toggle("仅字幕，不生成译音", isOn: $model.subtitlesOnly)
                         .accessibilityIdentifier("subtitlesOnly")
-                    if !model.targetLanguage.defaultSpeech && !model.bidirectional {
+                    if model.multilingualConversation {
+                        Text("优先使用百炼云端音色，云端音色不可用时使用 iPhone 声音。云端合成单独计费。")
+                            .font(.footnote).foregroundColor(.secondary)
+                    } else if !model.targetLanguage.defaultSpeech && !model.bidirectional {
                         Text("本版\(model.targetLanguage.name)暂仅提供字幕，已自动采用不生成译音的模式。")
                             .font(.footnote).foregroundColor(.secondary)
                     } else {
@@ -354,10 +401,10 @@ struct ContentView: View {
                         Label("英语译为中文", systemImage: "person.2")
                     }
                     Button { model.selectBidirectional() } label: {
-                        Label("中英免切换互译（测试）", systemImage: "arrow.triangle.2.circlepath")
+                        Label("中英自动互译", systemImage: "arrow.triangle.2.circlepath")
                     }
                     if model.bidirectional {
-                        Text("中英自动互译仍在测试，若服务报错，请选择明确的源语言和目标语言。")
+                        Text("同一个会话中，中文译成英文，英文译成中文。其他外语请用多语自动对话。")
                             .font(.footnote).foregroundColor(.secondary)
                     }
                 }

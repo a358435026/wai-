@@ -86,6 +86,27 @@ final class TongchuanUITests: XCTestCase {
         XCTAssertTrue(app.buttons["currentProvider"].label.contains("火山引擎"))
         XCTAssertTrue(language.label.contains("英语"))
     }
+    func testConversationModesExposeAutomaticDirectionWithoutStartingAnotherSession() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-reset-languages"]
+        app.launch()
+        let modes = app.buttons["conversationMode"]
+        waitReady(modes)
+        modes.tap()
+        let bilingual = app.buttons["中英自动互译 · 火山"]
+        XCTAssertTrue(bilingual.waitForExistence(timeout: 5))
+        bilingual.tap()
+        let direction = app.buttons["bilingualDirection"]
+        XCTAssertTrue(direction.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["mainAction"].label, "开始同传")
+        direction.tap()
+        let multilingual = app.buttons["多语自动对话 · 百炼"]
+        XCTAssertTrue(multilingual.waitForExistence(timeout: 5))
+        multilingual.tap()
+        XCTAssertTrue(app.buttons["scenePicker"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["scenePicker"].label.contains("多语自动对话"))
+        XCTAssertEqual(app.buttons["mainAction"].label, "开始同传")
+    }
     func testDarkLargeTextKeepsMainActionReachable() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-reset-languages", "--ui-dark-large", "--ui-captions"]
