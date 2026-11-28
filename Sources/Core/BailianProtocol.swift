@@ -99,6 +99,7 @@ public struct BailianDecoder {
         if final {
             if let complete = (event["transcript"] ?? event["text"]) as? String { text[key] = complete }
         } else { text[key, default: ""] += event["delta"] as? String ?? "" }
-        return [ASTResponse(event:source ? 660 : 661, text:text[key] ?? "", captionID:id, final:final)]
+        return [ASTResponse(event:source ? 660 : 661, text:text[key] ?? "", captionID:id, final:final,
+                            sourceLanguage: source && final ? event["language"] as? String : nil)]
     }
 }

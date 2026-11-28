@@ -100,9 +100,14 @@ struct ContentView: View {
     private var languageBar: some View {
         Group {
             if model.bidirectional {
-                Text("中英 ↔ 中英")
+                Button { showConversationModes = true } label: {
+                    HStack(spacing: 8) {
+                        Text("中英 ↔ 中英").accessibilityIdentifier("bilingualDirection")
+                        Image(systemName: "chevron.down").font(.caption)
+                    }
                     .font(.headline).frame(maxWidth: .infinity, minHeight: 48)
-                    .accessibilityIdentifier("bilingualDirection")
+                    .contentShape(Rectangle())
+                }.disabled(model.active)
             } else if dynamicTypeSize.isAccessibilitySize {
                 VStack(spacing: 8) {
                     HStack { sourceLanguageButton; swapLanguageButton }
@@ -126,7 +131,9 @@ struct ContentView: View {
     }
     private var targetLanguageButton: some View {
         Button { quickLanguagePicker = .target } label: {
-            languageCell(title: model.multilingualConversation ? "中文回复译为" : "译为", language: model.targetLanguage)
+            languageCell(title: model.multilingualConversation
+                ? (model.detectedReplyCode == nil ? "默认回复语言" : "中文回复跟随") : "译为",
+                language: model.multilingualConversation ? model.replyLanguage : model.targetLanguage)
         }
             .accessibilityLabel(model.translationTitle).accessibilityIdentifier("scenePicker")
             .disabled(!canPickLanguage)
@@ -235,9 +242,10 @@ struct ContentView: View {
                 }
             }
             if model.bidirectional {
-                Text("说中文译成英语，说英语译成中文。").font(.caption).foregroundStyle(.secondary)
+                Text("火山自动互译支持中英。其他语言可选多语自动对话或固定方向。")
+                    .font(.caption).foregroundStyle(.secondary)
             } else if model.multilingualConversation {
-                Text("外语译成中文，中文回复译成\(model.targetLanguage.shortName)。逐句翻译并使用系统声音。")
+                Text("外语译成中文。中文回复跟随最近识别的外语，识别前使用默认语言。")
                     .font(.caption).foregroundStyle(.secondary)
             } else if model.listenChinese {
               HStack {
@@ -369,7 +377,7 @@ struct ContentView: View {
                     Toggle("仅字幕，不生成译音", isOn: $model.subtitlesOnly)
                         .accessibilityIdentifier("subtitlesOnly")
                     if model.multilingualConversation {
-                        Text("百炼逐句翻译，iPhone 系统声音朗读。")
+                        Text("优先使用百炼云端音色，云端音色不可用时使用 iPhone 声音。云端合成单独计费。")
                             .font(.footnote).foregroundColor(.secondary)
                     } else if !model.targetLanguage.defaultSpeech && !model.bidirectional {
                         Text("本版\(model.targetLanguage.name)暂仅提供字幕，已自动采用不生成译音的模式。")

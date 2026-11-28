@@ -2,6 +2,25 @@ import XCTest
 @testable import TongchuanCore
 
 final class RoutingAndTerminologyTests: XCTestCase {
+    func testDialogueFollowsLatestConfidentForeignTurnAndKeepsQueuedDirection() {
+        var routing = ConversationTurnRouting()
+        let supported: Set<String> = ["ar", "es", "en"]
+        let mandarin = ["zh-Hans": 0.97]
+        XCTAssertEqual(routing.route(text: "您好", hypotheses: mandarin, fallback: "en", supported: supported), "en")
+        XCTAssertEqual(routing.route(text: "كم سعر هذه الدراجة؟", providerLanguage: "ar-SA", hypotheses: ["fa": 0.51, "ar": 0.48],
+                                     fallback: "en", supported: supported), "zh")
+        let queuedReply = routing.route(text: "价格可以商量", hypotheses: mandarin, fallback: "en", supported: supported)
+        XCTAssertEqual(routing.route(text: "OK", hypotheses: ["en": 0.95], fallback: "en", supported: supported), "zh")
+        XCTAssertEqual(routing.lastForeignLanguage, "ar")
+        XCTAssertEqual(routing.route(text: "¿Cuánto cuesta?", hypotheses: ["es": 0.72, "pt": 0.20],
+                                     fallback: "en", supported: supported), "zh")
+        XCTAssertEqual(routing.route(text: "明天发货", hypotheses: mandarin, fallback: "en", supported: supported), "es")
+        XCTAssertEqual(queuedReply, "ar")
+        XCTAssertEqual(routing.route(text: "Combien cela coûte ?", hypotheses: ["fr": 0.98],
+                                     fallback: "en", supported: supported), "zh")
+        XCTAssertEqual(routing.lastForeignLanguage, "es")
+    }
+
     func testMultilingualDialogueRoutesChineseToReplyAndForeignSpeechToMandarin() {
         XCTAssertEqual(ConversationTurnRouting.destination(text: "这款车多少钱？", detected: "zh-Hans", reply: "es"), "es")
         XCTAssertEqual(ConversationTurnRouting.destination(text: "交货期？", detected: nil, reply: "en"), "en")

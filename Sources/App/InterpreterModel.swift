@@ -38,7 +38,13 @@ final class InterpreterModel: ObservableObject {
     @Published private(set) var conversationNotice = ""
     private var turnTranslator: BailianTextTranslation?
     private var turnTask: Task<Void, Never>?
-    private var pendingTurns: [(id: String, text: String)] = []
+    @Published private(set) var detectedReplyCode: String?
+    private var turnRouting = ConversationTurnRouting()
+    private var speechSynthesis: BailianSpeechSynthesis?
+    private var speechTask: Task<Void, Never>?
+    private var speechGeneration = UUID()
+    private var pendingSpeech: [(text: String, target: String)] = []
+    private var pendingTurns: [(id: String, text: String, target: String, finalizedAt: Date)] = []
     private var finalizedTurns: Set<String> = []
     private let turnSpeaker = AVSpeechSynthesizer()
     @Published var subtitlesOnly = false {
@@ -48,6 +54,9 @@ final class InterpreterModel: ObservableObject {
     @Published var playbackEnabled = true {
         didSet {
             if !playbackEnabled {
+                speechTask?.cancel(); speechTask = nil
+                speechGeneration = UUID()
+                pendingSpeech.removeAll()
                 audio?.clearPlayback()
                 turnSpeaker.stopSpeaking(at: .immediate)
             }
@@ -122,6 +131,10 @@ final class InterpreterModel: ObservableObject {
     private var generation = UUID()
     var active: Bool { phase != .idle }
     var sourceLanguage: ASTLanguage { provider == .bailian ? BailianLanguages.automatic : ASTLanguages.source(sourceCode)! }
+    var replyLanguage: ASTLanguage {
+        detectedReplyCode.flatMap(BailianLanguages.target) ?? targetLanguage
+    }
+
     var targetLanguage: ASTLanguage { provider == .bailian ? BailianLanguages.target(targetCode)! : ASTLanguages.target(targetCode)! }
     var availableTargets: [ASTLanguage] {
         if multilingualConversation { return BailianLanguages.targets.filter { BailianTextTranslation.replyCodes.contains($0.id) } }
@@ -129,7 +142,7 @@ final class InterpreterModel: ObservableObject {
     }
     var translationTitle: String {
         if bidirectional { return "中英自动互译" }
-        if multilingualConversation { return "多语自动对话 · 回复\(targetLanguage.shortName)" }
+        if multilingualConversation { return "多语自动对话 · 回复\(replyLanguage.shortName)" }
         return "\(sourceLanguage.shortName) → \(targetLanguage.shortName)"
     }
     private var outputMode: ASTMode {
@@ -455,7 +468,10 @@ final class InterpreterModel: ObservableObject {
             return
         }
         if multilingualConversation {
-            do { turnTranslator = try BailianTextTranslation(host: bailianHost, key: key) }
+            do {
+                turnTranslator = try BailianTextTranslation(host: bailianHost, key: key)
+                speechSynthesis = BailianSpeechSynthesis(host: bailianHost, key: key)
+            }
             catch { errorMessage = error.localizedDescription; return }
         }
         if !resuming {
@@ -542,7 +558,9 @@ final class InterpreterModel: ObservableObject {
                     translation.set(id: id, text: "", final: false)
                 }
                 source.set(id: id, text: response.text, final: response.final)
-                if response.final { enqueueConversationTurn(id: id, text: response.text) }
+                if response.final {
+                    enqueueConversationTurn(id: id, text: response.text, providerLanguage: response.sourceLanguage)
+                }
                 return
             }
             if latestSourceItem != response.captionID { latestSourceItem = response.captionID; health.sourceBegan() }
@@ -573,22 +591,28 @@ final class InterpreterModel: ObservableObject {
         }
     }
 
-    private func enqueueConversationTurn(id: String, text: String) {
+    private func enqueueConversationTurn(id: String, text: String, providerLanguage: String?) {
         let sentence = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sentence.isEmpty, let translator = turnTranslator,
               finalizedTurns.insert(id).inserted else { return }
+        let target = turnRouting.route(text: sentence, providerLanguage: providerLanguage,
+            hypotheses: BailianTextTranslation.languageHypotheses(for: sentence),
+            fallback: targetCode, supported: BailianTextTranslation.replyCodes)
+        if detectedReplyCode != turnRouting.lastForeignLanguage {
+            detectedReplyCode = turnRouting.lastForeignLanguage
+        }
         guard pendingTurns.count < 16 else {
             conversationNotice = "文字翻译积压，这一句保留原文。请稍等再继续。"
             return
         }
-        pendingTurns.append((id, sentence))
+        pendingTurns.append((id, sentence, target, Date()))
         guard turnTask == nil else { return }
         let run = generation
         turnTask = Task { [weak self] in
             guard let self else { return }
             while self.generation == run && !Task.isCancelled && !self.pendingTurns.isEmpty {
                 let turn = self.pendingTurns.removeFirst()
-                let target = BailianTextTranslation.destination(for: turn.text, reply: self.targetCode)
+                let target = turn.target
                 do {
                     let terms = try TradeTerminology.combined(source: target == "zh" ? "bailian-auto" : "zh",
                         target: target, enabled: self.terminologyEnabled, customSource: self.termsSource,
@@ -597,7 +621,8 @@ final class InterpreterModel: ObservableObject {
                     guard self.generation == run, !Task.isCancelled else { return }
                     guard self.translation.contains(remoteID: turn.id) else { continue }
                     self.translation.set(id: turn.id, text: result, final: true)
-                    if self.playbackEnabled && !self.subtitlesOnly { self.speakConversationTurn(result, target: target) }
+                    self.firstTranslationDelay = Date().timeIntervalSince(turn.finalizedAt)
+                    if self.playbackEnabled && !self.subtitlesOnly { self.enqueueSpeech(result, target: target) }
                 } catch {
                     guard self.generation == run, !Task.isCancelled else { return }
                     self.conversationNotice = error.localizedDescription
@@ -607,17 +632,66 @@ final class InterpreterModel: ObservableObject {
         }
     }
 
-    private func speakConversationTurn(_ text: String, target: String) {
+    private func enqueueSpeech(_ text: String, target: String) {
+        guard pendingSpeech.count < 16 else {
+            conversationNotice = "播报积压，这一句已保留字幕。"
+            return
+        }
+        pendingSpeech.append((text, target))
+        guard speechTask == nil else { return }
+        let run = generation
+        let speechRun = speechGeneration
+        speechTask = Task { [weak self] in
+            guard let self else { return }
+            defer { if self.generation == run && self.speechGeneration == speechRun { self.speechTask = nil } }
+            while self.generation == run, self.playbackEnabled, !Task.isCancelled, !self.pendingSpeech.isEmpty {
+                let turn = self.pendingSpeech.removeFirst()
+                var playedCloudAudio = false
+                if let synth = self.speechSynthesis, BailianSpeechSynthesis.supports(turn.target) {
+                    do {
+                        try await synth.stream(turn.text, language: turn.target) { chunk in
+                            guard self.generation == run, self.playbackEnabled, !Task.isCancelled,
+                                  let audio = self.audio else { throw CancellationError() }
+                            try audio.play(chunk)
+                            playedCloudAudio = true
+                            self.receivedAudioBytes += chunk.count
+                        }
+                        continue
+                    } catch {
+                        guard self.generation == run, self.playbackEnabled, !Task.isCancelled else { return }
+                        if playedCloudAudio {
+                            self.conversationNotice = "云端译音未完整播出，已保留完整字幕。"
+                            continue
+                        }
+                        self.conversationNotice = "云端译音暂不可用，改用 iPhone 声音。"
+                    }
+                }
+                while self.audio?.isPlaying == true {
+                    do { try await Task.sleep(nanoseconds: 30_000_000) } catch { return }
+                }
+                guard self.generation == run, self.playbackEnabled, !Task.isCancelled else { return }
+                if self.speakConversationTurn(turn.text, target: turn.target) {
+                    repeat {
+                        do { try await Task.sleep(nanoseconds: 50_000_000) } catch { return }
+                    } while self.turnSpeaker.isSpeaking
+                }
+            }
+        }
+    }
+
+    @discardableResult
+    private func speakConversationTurn(_ text: String, target: String) -> Bool {
         let voice = (target == "zh" ? AVSpeechSynthesisVoice(language: "zh-CN") : AVSpeechSynthesisVoice(language: target))
             ?? AVSpeechSynthesisVoice.speechVoices().first { $0.language.lowercased().hasPrefix(target + "-") }
         guard let voice else {
             conversationNotice = "已显示译文。系统缺少该语种的朗读声音。"
-            return
+            return false
         }
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = voice
         turnSpeaker.speak(utterance)
         playing = true
+        return true
     }
 
     private func prepareAudio() {
@@ -676,7 +750,7 @@ final class InterpreterModel: ObservableObject {
                         self.lastCapture = Date()
                         guard self.phase == .live || self.phase == .finishing, let client = self.client else { continue }
                         if self.multilingualConversation {
-                            let speaking = self.turnSpeaker.isSpeaking
+                            let speaking = self.turnSpeaker.isSpeaking || audio.isPlaying
                             if self.playing && !speaking { self.speakerHoldUntil = Date().addingTimeInterval(0.25) }
                             if self.playing != speaking { self.playing = speaking }
                         }
@@ -737,11 +811,14 @@ final class InterpreterModel: ObservableObject {
         drainTask = Task { [weak self] in
             for _ in 0..<220 {
                 guard let self, self.generation == run else { return }
-                if self.turnTask == nil && self.audio?.isPlaying != true && !self.turnSpeaker.isSpeaking { break }
+                if self.turnTask == nil && self.speechTask == nil && self.audio?.isPlaying != true && !self.turnSpeaker.isSpeaking { break }
                 do { try await Task.sleep(nanoseconds: 100_000_000) } catch { return }
             }
             guard let self, self.generation == run else { return }
             if self.turnTask != nil { self.conversationNotice = "部分文字翻译未及时返回，已保留收到的字幕。" }
+            if self.speechTask != nil && self.turnTask == nil {
+                self.conversationNotice = "部分译音未及时播完，已保留字幕。"
+            }
             self.source.end(); self.translation.end()
             let shouldRead = self.readsChineseOnFinish && self.playbackEnabled
             self.cleanup(); self.status = "本次同传已结束"
@@ -770,6 +847,10 @@ final class InterpreterModel: ObservableObject {
         generation = UUID()
         deadlineTask?.cancel(); drainTask?.cancel(); connectionTask?.cancel(); captureWatchdog?.cancel()
         turnTask?.cancel(); turnTask = nil
+        speechTask?.cancel(); speechTask = nil
+        speechSynthesis?.close(); speechSynthesis = nil
+        pendingSpeech.removeAll()
+        turnRouting = ConversationTurnRouting(); detectedReplyCode = nil
         turnTranslator?.close(); turnTranslator = nil
         pendingTurns.removeAll(); finalizedTurns.removeAll()
         turnSpeaker.stopSpeaking(at: .immediate)

@@ -13,10 +13,12 @@ struct BailianTextTranslation {
         self.key = key
     }
 
-    static func destination(for text: String, reply: String) -> String {
-        ConversationTurnRouting.destination(
-            text: text, detected: NLLanguageRecognizer.dominantLanguage(for: text)?.rawValue, reply: reply
-        )
+    static func languageHypotheses(for text: String) -> [String: Double] {
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(text)
+        return Dictionary(uniqueKeysWithValues: recognizer.languageHypotheses(withMaximum: 3).map {
+            ($0.key.rawValue, $0.value)
+        })
     }
 
     func translate(_ text: String, to target: String, terms: [String: String]) async throws -> String {
