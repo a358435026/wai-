@@ -27,6 +27,7 @@ final class InterpreterModel: ObservableObject {
     @Published private(set) var capturePausedForSpeaker = false
     @Published private(set) var capturedPackets = 0
     @Published private(set) var sentPackets = 0
+    @Published private(set) var speakerSuppressedPackets = 0
     @Published private(set) var receivedAudioBytes = 0
     @Published private(set) var sourceCode = "zh"
     @Published private(set) var targetCode = "en"
@@ -39,6 +40,12 @@ final class InterpreterModel: ObservableObject {
         didSet { if !playbackEnabled { audio?.clearPlayback() } }
     }
     @Published private(set) var provider: TranslationProvider = .volcengine
+    @Published private(set) var listenChinese = UserDefaults.standard.bool(forKey: "listening.chinese") {
+        didSet { UserDefaults.standard.set(listenChinese, forKey: "listening.chinese") }
+    }
+    @Published var deferChineseSpeech = UserDefaults.standard.bool(forKey: "listening.deferSpeech") {
+        didSet { UserDefaults.standard.set(deferChineseSpeech, forKey: "listening.deferSpeech") }
+    }
     @Published var bailianHost = UserDefaults.standard.string(forKey: "bailian.host") ?? "" {
         didSet { UserDefaults.standard.set(bailianHost, forKey: "bailian.host") }
     }
@@ -67,6 +74,9 @@ final class InterpreterModel: ObservableObject {
     @Published private(set) var firstTranslationDelay: Double?
     @Published private(set) var handshakeMilliseconds: Int?
     @Published private(set) var captionDirection: String?
+    private var captionTarget: String?
+    private var pendingListeningChange = false
+    private let chineseReader = AVSpeechSynthesizer()
     private var pendingLanguageChange: (field: LanguageField, code: String)?
     private var attempted: Set<TranslationProvider> = []
     private var sessionOutputMode: ASTMode?
@@ -105,11 +115,16 @@ final class InterpreterModel: ObservableObject {
     }
     private var outputMode: ASTMode {
         if let sessionOutputMode { return sessionOutputMode }
+        if readsChineseOnFinish { return .subtitles }
         if provider == .bailian { return subtitlesOnly || !targetLanguage.defaultSpeech ? .subtitles : .speechToSpeech }
         if bidirectional { return subtitlesOnly ? .subtitles : .speechToSpeech }
         return ASTLanguages.mode(target: targetCode, subtitlesOnly: subtitlesOnly)
     }
     var producesSpeech: Bool { outputMode == .speechToSpeech }
+    var readsChineseOnFinish: Bool { listenChinese && deferChineseSpeech && !subtitlesOnly }
+    var canReadChineseCaptions: Bool {
+        !active && captionTarget == "zh" && translation.captions.contains { !$0.text.isEmpty }
+    }
     var canSwap: Bool { provider == .volcengine && !bidirectional && ASTLanguages.target(sourceCode) != nil }
     var configuration: ASTConfiguration {
         ASTConfiguration(source: provider == .bailian ? "bailian-auto" : bidirectional ? "zhen" : sourceCode,
@@ -123,7 +138,7 @@ final class InterpreterModel: ObservableObject {
             customTarget: termsTarget, custom: customTerms)
     }
     private var eligibleBackup: (provider: TranslationProvider, configuration: ASTConfiguration)? {
-        guard automaticFallback, !localTest,
+        guard automaticFallback, !localTest, !listenChinese,
               let next = FailoverPolicy.destination(current: provider, tried: attempted,
                   configured: Set(TranslationProvider.allCases.filter { KeychainStore.read(provider: $0) != nil })),
               let recipe = FailoverPolicy.configuration(for: next, current: configuration, automaticSource: backupSource) else { return nil }
@@ -131,6 +146,7 @@ final class InterpreterModel: ObservableObject {
         return (next, recipe)
     }
     var fallbackDescription: String {
+        if listenChinese { return "听外语模式需要百炼自动识别源语言。不会切到固定源语种。" }
         let current = configuration
         let next: TranslationProvider = provider == .bailian ? .volcengine : .bailian
         guard KeychainStore.read(provider: next) != nil else { return "备用\(next.title)尚未配置Key；仍可单独使用当前服务。" }
@@ -153,7 +169,36 @@ final class InterpreterModel: ObservableObject {
     }
     func selectTarget(_ code: String) {
         guard !active, availableTargets.contains(where: { $0.id == code }) else { return }
+        if code != "zh" { listenChinese = false }
         bidirectional = false; targetCode = code; persistLanguages()
+    }
+    func enterChineseListening() {
+        guard !localTest else { return }
+        if active {
+            pendingListeningChange = true
+            stop()
+            return
+        }
+        if !listenChinese {
+            UserDefaults.standard.set(provider.rawValue, forKey: "listening.replyProvider")
+            UserDefaults.standard.set(targetCode, forKey: "listening.replyTarget")
+        }
+        selectProvider(.bailian, preserveCaptions: true)
+        selectTarget("zh")
+        listenChinese = true
+        subtitlesOnly = false
+        playbackEnabled = true
+        if !keySaved || (try? BailianWire.normalizedHost(bailianHost)) == nil { showSettings = true }
+    }
+    func exitChineseListening() {
+        guard !active else { return }
+        listenChinese = false
+        let defaults = UserDefaults.standard
+        if let saved = defaults.string(forKey: "listening.replyProvider"), let previous = TranslationProvider(rawValue: saved) {
+            selectProvider(previous, preserveCaptions: true)
+        }
+        if provider == .volcengine { selectSource("zh") }
+        selectTarget(defaults.string(forKey: "listening.replyTarget") ?? "en")
     }
     func requestLanguageChange(_ field: LanguageField, code: String) {
         guard !localTest else { return }
@@ -182,12 +227,13 @@ final class InterpreterModel: ObservableObject {
         UserDefaults.standard.set(sourceCode, forKey: "translation.\(provider.rawValue).source")
         UserDefaults.standard.set(targetCode, forKey: "translation.\(provider.rawValue).target")
     }
-    func selectProvider(_ value: TranslationProvider) {
+    func selectProvider(_ value: TranslationProvider, preserveCaptions: Bool = false) {
         guard !active, value != provider else { return }
+        listenChinese = false
         provider = value
         UserDefaults.standard.set(value.rawValue, forKey: "translation.provider")
         restoreLanguages(); keySaved = KeychainStore.read(provider: provider) != nil
-        clearCaptions()
+        if !preserveCaptions { clearCaptions() }
     }
     private func restoreLanguages() {
         let defaults = UserDefaults.standard
@@ -206,11 +252,13 @@ final class InterpreterModel: ObservableObject {
     init() {
         provider = TranslationProvider(rawValue: UserDefaults.standard.string(forKey: "translation.provider") ?? "") ?? .volcengine
         restoreLanguages()
+        if provider != .bailian || targetCode != "zh" { listenChinese = false }
         keySaved = KeychainStore.read(provider: provider) != nil
         subtitlesOnly = UserDefaults.standard.bool(forKey: "translation.subtitlesOnly")
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-languages") {
             provider = .volcengine; sourceCode = "zh"; targetCode = "en"; subtitlesOnly = false
+            listenChinese = false
             keySaved = KeychainStore.read(provider: provider) != nil
         }
         if ProcessInfo.processInfo.arguments.contains("--ui-auth-error") {
@@ -276,6 +324,21 @@ final class InterpreterModel: ObservableObject {
     func clearCaptions() {
         source = CaptionLane(); translation = CaptionLane(); errorMessage = nil
         captionDirection = nil
+        captionTarget = nil
+    }
+    func readChineseCaptions() {
+        guard canReadChineseCaptions else { return }
+        guard let voice = AVSpeechSynthesisVoice(language: "zh-CN") else {
+            errorMessage = "系统没有可用的中文朗读声音，请在 iPhone 设置中下载。"
+            return
+        }
+        chineseReader.stopSpeaking(at: .immediate)
+        chineseReader.usesApplicationAudioSession = false
+        for caption in translation.captions where !caption.text.isEmpty {
+            let utterance = AVSpeechUtterance(string: caption.text)
+            utterance.voice = voice
+            chineseReader.speak(utterance)
+        }
     }
     func interruptPlayback() { skipCurrentSpeech = true; audio?.clearPlayback() }
 
@@ -310,6 +373,7 @@ final class InterpreterModel: ObservableObject {
     }
     private func resetAudioStats() {
         capturedPackets = 0; sentPackets = 0; receivedAudioBytes = 0
+        speakerSuppressedPackets = 0
         inputBuffers = 0; inputBytes = 0; inputLevel = 0; outputLevel = 0
         inputDevice = "尚未启动"; capturePausedForSpeaker = false
         speakerHoldUntil = .distantPast
@@ -318,6 +382,7 @@ final class InterpreterModel: ObservableObject {
     func start() { startSession(resuming: false) }
     private func startSession(resuming: Bool) {
         guard phase == .idle else { return }
+        chineseReader.stopSpeaking(at: .immediate)
         if !resuming {
             attempted = []; switchNotice = ""; latestFailure = ""; pendingSwitchReason = ""
         }
@@ -340,6 +405,7 @@ final class InterpreterModel: ObservableObject {
         if !resuming {
             clearCaptions()
             captionDirection = translationTitle
+            captionTarget = targetCode
         }
         else { source.end(); translation.end(); errorMessage = nil }
         micMuted = false
@@ -449,7 +515,9 @@ final class InterpreterModel: ObservableObject {
         audio.onPlaybackChanged = { [weak self] value in
             guard let self else { return }
             self.playing = value
-            if self.audio?.isSpeaker == true { self.speakerHoldUntil = value ? .distantFuture : Date().addingTimeInterval(0.35) }
+            if self.audio?.isSpeaker == true && (value || self.speakerHoldUntil == .distantFuture) {
+                self.speakerHoldUntil = value ? .distantFuture : Date().addingTimeInterval(0.35)
+            }
             if !value { self.outputLevel = 0 }
         }
         audio.onLevel = { [weak self] value in
@@ -494,6 +562,7 @@ final class InterpreterModel: ObservableObject {
                         self.lastCapture = Date()
                         guard self.phase == .live || self.phase == .finishing, let client = self.client else { continue }
                         self.capturePausedForSpeaker = audio.isSpeaker && Date() < self.speakerHoldUntil
+                        if self.capturePausedForSpeaker && !self.micMuted { self.speakerSuppressedPackets += 1 }
                         let packet = (self.micMuted || self.capturePausedForSpeaker) ? Data(repeating: 0, count: data.count) : data
                         try await client.sendAudio(packet)
                         self.sentPackets += 1
@@ -553,7 +622,9 @@ final class InterpreterModel: ObservableObject {
             }
             guard let self, self.generation == run else { return }
             self.source.end(); self.translation.end()
+            let shouldRead = self.readsChineseOnFinish && self.playbackEnabled
             self.cleanup(); self.status = "本次同传已结束"
+            if shouldRead { self.readChineseCaptions() }
         }
     }
     private func serviceFailed(_ message: String) {
@@ -587,6 +658,10 @@ final class InterpreterModel: ObservableObject {
         if let change = pendingLanguageChange {
             pendingLanguageChange = nil
             requestLanguageChange(change.field, code: change.code)
+        }
+        if pendingListeningChange {
+            pendingListeningChange = false
+            enterChineseListening()
         }
     }
     private func describe(_ error: Error) -> String {

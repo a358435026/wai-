@@ -1,3 +1,13 @@
+# 0.6.1 build 25 验证 · 2026-11-28
+
+- [构建](https://github.com/a358435026/wai-/actions/runs/46131430691)通过 34 项核心测试和 11 项模拟器界面测试。新增测试覆盖首页听外语入口、自动识别 → 中文、延后播报开关和回到原回复方向。
+- 百炼短测使用英文、西语及俄语样音，在不指定源语种且目标固定中文时均返回中文译文和译音。英文 S2T 短测也返回中文，服务端译音字节为 0。
+- 俄语测试样本来自 [Wikimedia Commons / Pogrebnoj-Alexandroff](https://commons.wikimedia.org/wiki/File:Ru-%D0%BA%D0%B0%D0%BA_%D0%B4%D0%B5%D0%BB%D0%B0-.ogg)，CC BY-SA 3.0。仅本地转码并补静音用于测试。样音不随应用分发。
+- build 25 iPhoneOS ARM64，最低 iOS 15.0。IPA SHA-256 99b0c994cdddbaac1aec85adeba09b46d622caeb3da5fe9a4dc1e6d9ebdaaab2。
+- iOS 15 真机还需验证外放、耳机、译文朗读和快速发言。延后播报朗读会话保留的译文，最终识别准确率仍由音源与服务决定。
+
+---
+
 # 0.6.1 build 22 验证 · 2026-11-28
 
 - 应用源码提交 ea3483d7c89e6118ba154082f2a890f2ed841d35。[GitHub Actions 构建](https://github.com/a358435026/wai-/actions/runs/46118790185)。
