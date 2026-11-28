@@ -124,7 +124,7 @@ final class InterpreterModel: ObservableObject {
     var sourceLanguage: ASTLanguage { provider == .bailian ? BailianLanguages.automatic : ASTLanguages.source(sourceCode)! }
     var targetLanguage: ASTLanguage { provider == .bailian ? BailianLanguages.target(targetCode)! : ASTLanguages.target(targetCode)! }
     var availableTargets: [ASTLanguage] {
-        if multilingualConversation { return BailianLanguages.targets.filter { $0.id != "zh" } }
+        if multilingualConversation { return BailianLanguages.targets.filter { BailianTextTranslation.replyCodes.contains($0.id) } }
         return provider == .bailian ? BailianLanguages.targets : ASTLanguages.targets(for: sourceCode)
     }
     var translationTitle: String {
@@ -251,7 +251,7 @@ final class InterpreterModel: ObservableObject {
     }
     func selectMultilingualConversation() {
         guard !active else { return }
-        let reply = targetCode != "zh" && BailianLanguages.target(targetCode) != nil ? targetCode : "en"
+        let reply = BailianTextTranslation.replyCodes.contains(targetCode) ? targetCode : "en"
         listenChinese = false
         selectProvider(.bailian, preserveCaptions: true)
         selectTarget(reply)
@@ -297,7 +297,7 @@ final class InterpreterModel: ObservableObject {
         provider = TranslationProvider(rawValue: UserDefaults.standard.string(forKey: "translation.provider") ?? "") ?? .volcengine
         restoreLanguages()
         if provider != .bailian || targetCode != "zh" { listenChinese = false }
-        if provider != .bailian || targetCode == "zh" { multilingualConversation = false }
+        if provider != .bailian || !BailianTextTranslation.replyCodes.contains(targetCode) { multilingualConversation = false }
         keySaved = KeychainStore.read(provider: provider) != nil
         subtitlesOnly = UserDefaults.standard.bool(forKey: "translation.subtitlesOnly")
         #if DEBUG
@@ -537,8 +537,8 @@ final class InterpreterModel: ObservableObject {
         case 660:
             if multilingualConversation {
                 let id = response.captionID
-                if id != latestSourceItem {
-                    latestSourceItem = id
+                guard !finalizedTurns.contains(id) else { return }
+                if !translation.contains(remoteID: id) {
                     translation.set(id: id, text: "", final: false)
                 }
                 source.set(id: id, text: response.text, final: response.final)
@@ -595,6 +595,7 @@ final class InterpreterModel: ObservableObject {
                         customTarget: self.termsTarget, custom: self.customTerms)
                     let result = try await translator.translate(turn.text, to: target, terms: terms)
                     guard self.generation == run, !Task.isCancelled else { return }
+                    guard self.translation.contains(remoteID: turn.id) else { continue }
                     self.translation.set(id: turn.id, text: result, final: true)
                     if self.playbackEnabled && !self.subtitlesOnly { self.speakConversationTurn(result, target: target) }
                 } catch {

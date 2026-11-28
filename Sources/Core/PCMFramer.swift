@@ -33,6 +33,7 @@ public struct CaptionLane: Sendable {
     public private(set) var captions: [Caption] = []
     private var remoteIDs: [String: UUID] = [:]
     public init() {}
+    public func contains(remoteID: String) -> Bool { remoteIDs[remoteID] != nil }
     public mutating func begin() {
         if let last = captions.last, !last.final, last.text.isEmpty { return }
         if !captions.isEmpty { captions[captions.count - 1].final = true }

@@ -2,6 +2,7 @@ import Foundation
 import NaturalLanguage
 
 struct BailianTextTranslation {
+    static let replyCodes: Set<String> = ["en", "es", "pt", "de", "fr", "ru", "ja", "ko", "it", "ar", "th", "id", "vi", "tr", "nl", "hi"]
     private let endpoint: URL
     private let key: String
     private let session = URLSession(configuration: .ephemeral)
