@@ -11,7 +11,7 @@ struct ConversationTranscript: View {
                         Text(String(format: "%02d", index + 1))
                             .font(.caption2.monospacedDigit()).foregroundColor(VoiceTheme.accent)
                             .padding(5).background(VoiceTheme.soft, in: Circle())
-                        Text(model.translationTitle).font(.caption).foregroundColor(.secondary)
+                        Text(model.captionDirection ?? model.translationTitle).font(.caption).foregroundColor(.secondary)
                     }.accessibilityHidden(true)
                     if index < model.source.captions.count {
                         Text(model.source.captions[index].text).font(.body).foregroundColor(.secondary)

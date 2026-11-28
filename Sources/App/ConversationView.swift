@@ -5,6 +5,8 @@ struct ContentView: View {
     @StateObject private var model = InterpreterModel()
     @State private var showCaptions = true
     @State private var showScenes = false
+    @State private var quickLanguagePicker: LanguageField?
+    @State private var pendingQuickLanguage: String?
     @State private var sourcePickerOpen = false
     @State private var targetPickerOpen = false
     @State private var showDiagnostics = false
@@ -61,9 +63,11 @@ struct ContentView: View {
         .foregroundColor(VoiceTheme.ink).background(VoiceTheme.background.ignoresSafeArea())
         .sheet(isPresented: $model.showSettings) { SettingsView(model: model) }
         .sheet(isPresented: $showScenes) { sceneSheet }
+        .sheet(item: $quickLanguagePicker) { field in quickLanguageSheet(field) }
         .sheet(isPresented: $showDiagnostics) { diagnostics }
         .confirmationDialog("更多操作", isPresented: $showMore, titleVisibility: .hidden) {
             Button("设置") { model.showSettings = true }.disabled(model.active)
+            Button("语言与输出") { showScenes = true }.disabled(model.active)
             Button("连接诊断 / 测试收音") { showDiagnostics = true }
             Button("清空字幕", role: .destructive) { model.clearCaptions() }.disabled(model.active)
             Button("取消", role: .cancel) {}
@@ -97,25 +101,33 @@ struct ContentView: View {
             }
         }.padding(7).background(VoiceTheme.surface, in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(VoiceTheme.line, lineWidth: 1))
-            .padding(.horizontal, 20).buttonStyle(.plain).disabled(model.active)
+            .padding(.horizontal, 20).buttonStyle(.plain)
     }
     private var sourceLanguageButton: some View {
-        Button { showScenes = true } label: { languageCell(title: "说话语言", language: model.sourceLanguage) }
+        Button { quickLanguagePicker = .source } label: {
+            languageCell(title: "说话语言", language: model.sourceLanguage, selectable: model.provider != .bailian)
+        }
             .accessibilityLabel("说话语言：\(model.sourceLanguage.name)")
+            .accessibilityIdentifier("homeSourceLanguage")
+            .disabled(model.provider == .bailian || !canPickLanguage)
     }
     private var targetLanguageButton: some View {
-        Button { showScenes = true } label: { languageCell(title: "译为", language: model.targetLanguage) }
+        Button { quickLanguagePicker = .target } label: { languageCell(title: "译为", language: model.targetLanguage) }
             .accessibilityLabel(model.translationTitle).accessibilityIdentifier("scenePicker")
+            .disabled(!canPickLanguage)
     }
     private var swapLanguageButton: some View {
         Button { model.swapLanguages() } label: {
             Image(systemName: "arrow.left.arrow.right").font(.body.weight(.medium))
                 .frame(minWidth: 44, minHeight: 44).padding(4)
                 .background(VoiceTheme.soft, in: RoundedRectangle(cornerRadius: 12))
-        }.disabled(!model.canSwap).accessibilityLabel(model.provider == .bailian ? "自动识别源语言，无需交换" : "交换翻译方向")
+        }.disabled(!model.canSwap || model.active).accessibilityLabel(model.provider == .bailian ? "自动识别源语言，无需交换" : "交换翻译方向")
             .accessibilityIdentifier("quickSwapLanguages")
     }
-    private func languageCell(title: String, language: ASTLanguage) -> some View {
+    private var canPickLanguage: Bool {
+        !model.localTest && (model.phase == .idle || model.phase == .live)
+    }
+    private func languageCell(title: String, language: ASTLanguage, selectable: Bool = true) -> some View {
         HStack(spacing: 6) {
             LanguageEmblem(code: language.id, provider: model.provider)
             VStack(alignment: .leading, spacing: 4) {
@@ -124,7 +136,42 @@ struct ContentView: View {
                     .font(.subheadline.weight(.semibold)).lineLimit(2)
             }
             Spacer(minLength: 0)
+            if selectable {
+                Image(systemName: "chevron.down").font(.caption2).foregroundColor(.secondary)
+            }
         }.frame(maxWidth: .infinity, minHeight: 48).padding(.horizontal, 4).contentShape(Rectangle())
+    }
+    private func quickLanguageSheet(_ field: LanguageField) -> some View {
+        let selected = field == .source ? model.sourceCode : model.targetCode
+        let choices = field == .source ? ASTLanguages.sources : model.availableTargets
+        return NavigationView {
+            LanguageSelectionView(title: field == .source ? "说话语言" : "目标语言",
+                options: choices, selected: selected, showSpeechSupport: field == .target,
+                provider: model.provider) { code in
+                    if code == selected && !model.bidirectional { quickLanguagePicker = nil; return }
+                    if model.active { pendingQuickLanguage = code }
+                    else { applyQuickLanguage(field, code: code) }
+                }
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("完成") { quickLanguagePicker = nil }
+                    }
+                }
+                .alert("切换语言", isPresented: Binding(
+                    get: { pendingQuickLanguage != nil },
+                    set: { if !$0 { pendingQuickLanguage = nil } }
+                ), presenting: pendingQuickLanguage) { code in
+                    Button("结束并应用") { applyQuickLanguage(field, code: code) }
+                    Button("取消", role: .cancel) { pendingQuickLanguage = nil }
+                } message: { _ in
+                    Text("先完成当前同传，再应用新语言。准备好后点“开始同传”。")
+                }
+        }.navigationViewStyle(.stack)
+    }
+    private func applyQuickLanguage(_ field: LanguageField, code: String) {
+        model.requestLanguageChange(field, code: code)
+        pendingQuickLanguage = nil
+        quickLanguagePicker = nil
     }
     private var sessionNotes: some View {
         VStack(spacing: 8) {

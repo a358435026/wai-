@@ -3,6 +3,11 @@ import Combine
 import Foundation
 import UIKit
 
+enum LanguageField: String, Identifiable, Hashable {
+    case source, target
+    var id: Self { self }
+}
+
 @MainActor
 final class InterpreterModel: ObservableObject {
     enum Phase: Equatable { case idle, connecting, live, finishing }
@@ -61,6 +66,8 @@ final class InterpreterModel: ObservableObject {
     @Published private(set) var latestFailure = ""
     @Published private(set) var firstTranslationDelay: Double?
     @Published private(set) var handshakeMilliseconds: Int?
+    @Published private(set) var captionDirection: String?
+    private var pendingLanguageChange: (field: LanguageField, code: String)?
     private var attempted: Set<TranslationProvider> = []
     private var sessionOutputMode: ASTMode?
     private var health = TranslationHealth()
@@ -147,6 +154,17 @@ final class InterpreterModel: ObservableObject {
     func selectTarget(_ code: String) {
         guard !active, availableTargets.contains(where: { $0.id == code }) else { return }
         bidirectional = false; targetCode = code; persistLanguages()
+    }
+    func requestLanguageChange(_ field: LanguageField, code: String) {
+        guard !localTest else { return }
+        if active {
+            pendingLanguageChange = (field, code)
+            stop()
+        } else if field == .source {
+            selectSource(code)
+        } else {
+            selectTarget(code)
+        }
     }
     func selectPair(source: String, target: String) {
         guard provider == .volcengine, !active, ASTLanguages.validationError(source: source, target: target) == nil else { return }
@@ -255,7 +273,10 @@ final class InterpreterModel: ObservableObject {
         }
     }
     func deleteKey() throws { try KeychainStore.delete(provider: provider); keySaved = false }
-    func clearCaptions() { source = CaptionLane(); translation = CaptionLane(); errorMessage = nil }
+    func clearCaptions() {
+        source = CaptionLane(); translation = CaptionLane(); errorMessage = nil
+        captionDirection = nil
+    }
     func interruptPlayback() { skipCurrentSpeech = true; audio?.clearPlayback() }
 
     // This test uses the exact recording path as a real session, without opening
@@ -316,7 +337,10 @@ final class InterpreterModel: ObservableObject {
             if phase == .idle { showSettings = true }
             return
         }
-        if !resuming { clearCaptions() }
+        if !resuming {
+            clearCaptions()
+            captionDirection = translationTitle
+        }
         else { source.end(); translation.end(); errorMessage = nil }
         micMuted = false
         resetAudioStats(); localTest = false; skipCurrentSpeech = false
@@ -560,6 +584,10 @@ final class InterpreterModel: ObservableObject {
         playing = false; phase = .idle; micMuted = false; inputLevel = 0; outputLevel = 0
         capturePausedForSpeaker = false; localTest = false
         UIApplication.shared.isIdleTimerDisabled = false
+        if let change = pendingLanguageChange {
+            pendingLanguageChange = nil
+            requestLanguageChange(change.field, code: change.code)
+        }
     }
     private func describe(_ error: Error) -> String {
         let nsError = error as NSError

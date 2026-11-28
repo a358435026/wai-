@@ -8,15 +8,39 @@ struct LanguageSelectionView: View {
     var provider: TranslationProvider = .volcengine
     let select: (String) -> Void
     @State private var query = ""
+    @State private var outputFilter: OutputFilter = .all
+    private enum OutputFilter: String, CaseIterable, Hashable {
+        case all = "全部"
+        case speech = "可播报"
+        case captions = "仅字幕"
+
+        func includes(_ language: ASTLanguage) -> Bool {
+            switch self {
+            case .all: return true
+            case .speech: return language.defaultSpeech
+            case .captions: return !language.defaultSpeech
+            }
+        }
+    }
+    private let english = Locale(identifier: "en")
     private var matches: [ASTLanguage] {
         let value = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? options : options.filter {
-            $0.name.localizedCaseInsensitiveContains(value) || $0.id.localizedCaseInsensitiveContains(value)
+        return options.filter { language in
+            guard !showSpeechSupport || outputFilter.includes(language) else { return false }
+            return value.isEmpty || [language.name, language.shortName, language.id,
+                english.localizedString(forLanguageCode: language.id) ?? ""].contains {
+                $0.localizedStandardContains(value)
+            }
         }
     }
     var body: some View {
         List {
-            if matches.isEmpty { Text("未找到该语言，请尝试语种名称或代码。").foregroundColor(.secondary) }
+            if showSpeechSupport {
+                Picker("输出能力", selection: $outputFilter) {
+                    ForEach(OutputFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.segmented).accessibilityIdentifier("languageOutputFilter")
+            }
+            if matches.isEmpty { Text("没有符合条件的语言。试试其他名称、代码或筛选条件。").foregroundColor(.secondary) }
             ForEach(matches) { language in
                 Button {
                     select(language.id)
@@ -39,7 +63,7 @@ struct LanguageSelectionView: View {
                 }.accessibilityIdentifier("language-\(language.id)")
             }
         }
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索语言或代码")
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索中文、英文或语言代码")
         .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
     }
 }

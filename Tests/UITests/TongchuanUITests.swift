@@ -7,10 +7,8 @@ final class TongchuanUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 12), .completed, element.debugDescription)
     }
     private func openLanguages(_ app: XCUIApplication) {
-        app.buttons["scenePicker"].tap()
-        if !app.buttons["targetLanguagePicker"].waitForExistence(timeout: 5) {
-            app.buttons["scenePicker"].tap()
-        }
+        openMore(app, destination: "语言与输出")
+        app.buttons["语言与输出"].tap()
         XCTAssertTrue(app.buttons["targetLanguagePicker"].waitForExistence(timeout: 5))
     }
     private func openMore(_ app: XCUIApplication, destination: String) {
@@ -33,6 +31,39 @@ final class TongchuanUITests: XCTestCase {
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "Native home country flags and quick direction swap"
         shot.lifetime = .keepAlways; add(shot)
+    }
+    func testHomeLanguageSelectorsSearchEnglishNamesAndFilterOutput() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-reset-languages"]
+        app.launch()
+        let source = app.buttons["homeSourceLanguage"]
+        waitReady(source)
+        source.tap()
+        let sourceSearch = app.searchFields.firstMatch
+        waitReady(sourceSearch)
+        sourceSearch.tap()
+        sourceSearch.typeText("English")
+        let english = app.buttons["language-en"]
+        waitReady(english)
+        english.tap()
+        waitReady(source)
+        XCTAssertTrue(source.label.contains("英语"))
+
+        let target = app.buttons["scenePicker"]
+        waitReady(target)
+        target.tap()
+        let captionsOnly = app.segmentedControls.buttons["仅字幕"]
+        waitReady(captionsOnly)
+        captionsOnly.tap()
+        let targetSearch = app.searchFields.firstMatch
+        targetSearch.tap()
+        targetSearch.typeText("Hindi")
+        let hindi = app.buttons["language-hi"]
+        waitReady(hindi)
+        hindi.tap()
+        waitReady(target)
+        XCTAssertTrue(target.label.contains("印地语"))
+        XCTAssertTrue(app.staticTexts["outputModeHint"].waitForExistence(timeout: 5))
     }
     func testDarkLargeTextKeepsMainActionReachable() {
         let app = XCUIApplication()
