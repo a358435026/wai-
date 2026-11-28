@@ -93,11 +93,15 @@ final class TongchuanUITests: XCTestCase {
         let modes = app.buttons["conversationMode"]
         waitReady(modes)
         modes.tap()
-        app.buttons["中英自动互译 · 火山"].tap()
+        let bilingual = app.buttons["中英自动互译 · 火山"]
+        XCTAssertTrue(bilingual.waitForExistence(timeout: 5))
+        bilingual.tap()
         XCTAssertTrue(app.staticTexts["bilingualDirection"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons["mainAction"].label, "开始同传")
         modes.tap()
-        app.buttons["多语自动对话 · 百炼"].tap()
+        let multilingual = app.buttons["多语自动对话 · 百炼"]
+        XCTAssertTrue(multilingual.waitForExistence(timeout: 5))
+        multilingual.tap()
         XCTAssertTrue(app.buttons["scenePicker"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["scenePicker"].label.contains("多语自动对话"))
         XCTAssertEqual(app.buttons["mainAction"].label, "开始同传")

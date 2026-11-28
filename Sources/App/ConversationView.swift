@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var quickLanguagePicker: LanguageField?
     @State private var pendingQuickLanguage: String?
     @State private var confirmListening = false
+    @State private var showConversationModes = false
     @State private var sourcePickerOpen = false
     @State private var targetPickerOpen = false
     @State private var showDiagnostics = false
@@ -99,7 +100,7 @@ struct ContentView: View {
     private var languageBar: some View {
         Group {
             if model.bidirectional {
-                Label("中英 ↔ 中英", systemImage: "arrow.left.arrow.right")
+                Text("中英 ↔ 中英")
                     .font(.headline).frame(maxWidth: .infinity, minHeight: 48)
                     .accessibilityIdentifier("bilingualDirection")
             } else if dynamicTypeSize.isAccessibilitySize {
@@ -212,15 +213,26 @@ struct ContentView: View {
     private var listeningControls: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Menu {
+                Button { showConversationModes = true } label: {
+                    HStack {
+                        Label(model.bidirectional ? "中英自动互译" : model.multilingualConversation ? "多语自动对话" : "选择对话模式",
+                              systemImage: "arrow.left.arrow.right")
+                        Spacer()
+                        Image(systemName: "chevron.down").font(.caption)
+                    }
+                    .padding(.horizontal, 10).frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background(VoiceTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                .disabled(model.active)
+                .accessibilityIdentifier("conversationMode")
+                .confirmationDialog("对话模式", isPresented: $showConversationModes, titleVisibility: .visible) {
                     Button("中英自动互译 · 火山") { model.selectBidirectional() }
                     Button("多语自动对话 · 百炼") { model.selectMultilingualConversation() }
                     Button("固定方向") { model.selectFixedDirection() }
-                } label: {
-                    Label(model.bidirectional ? "中英自动互译" : model.multilingualConversation ? "多语自动对话" : "选择对话模式",
-                          systemImage: "arrow.left.arrow.right")
-                }.disabled(model.active).accessibilityIdentifier("conversationMode")
-                Spacer()
+                    Button("取消", role: .cancel) {}
+                }
             }
             if model.bidirectional {
                 Text("说中文译成英语，说英语译成中文。").font(.caption).foregroundStyle(.secondary)
