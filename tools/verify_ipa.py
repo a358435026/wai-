@@ -61,6 +61,8 @@ def verify_privacy(archive, app_path, info):
         assert item['NSPrivacyCollectedDataTypePurposes'] == ['NSPrivacyCollectedDataTypePurposeAppFunctionality']
     assert info['ITSAppUsesNonExemptEncryption'] is False
     assert info['UIApplicationSceneManifest']['UIApplicationSupportsMultipleScenes'] is False
+    assert info['UIApplicationSceneManifest']['UISceneConfigurations'] == {}
+    assert info['CFBundleDevelopmentRegion'] == 'zh-Hans'
     assert 'zh-Hans' in info['CFBundleLocalizations']
 
 

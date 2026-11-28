@@ -1,6 +1,7 @@
 name: Tongchuan
 options:
   bundleIdPrefix: app.tongchuan
+  developmentLanguage: zh-Hans
   deploymentTarget:
     iOS: '15.0'
 settings:
@@ -8,7 +9,7 @@ settings:
     SWIFT_VERSION: '5.0'
     TARGETED_DEVICE_FAMILY: '1,2'
     MARKETING_VERSION: '0.6.1'
-    CURRENT_PROJECT_VERSION: '23'
+    CURRENT_PROJECT_VERSION: '24'
 targets:
   Tongchuan:
     type: application
@@ -21,7 +22,6 @@ targets:
     info:
       path: Config/Tongchuan-Info.plist
       properties:
-        CFBundleDevelopmentRegion: zh-Hans
         CFBundleLocalizations: [zh-Hans]
         ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:
