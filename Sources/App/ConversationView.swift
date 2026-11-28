@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var showScenes = false
     @State private var quickLanguagePicker: LanguageField?
     @State private var pendingQuickLanguage: String?
+    @State private var confirmListening = false
     @State private var sourcePickerOpen = false
     @State private var targetPickerOpen = false
     @State private var showDiagnostics = false
@@ -20,6 +21,7 @@ struct ContentView: View {
         VStack(spacing: 14) {
             toolbar
             languageBar
+            listeningControls
             ScrollViewReader { reader in
                 ScrollView {
                     VStack(spacing: 18) {
@@ -71,6 +73,12 @@ struct ContentView: View {
             Button("连接诊断 / 测试收音") { showDiagnostics = true }
             Button("清空字幕", role: .destructive) { model.clearCaptions() }.disabled(model.active)
             Button("取消", role: .cancel) {}
+        }
+        .alert("切换到听外语", isPresented: $confirmListening) {
+            Button("结束并切换") { model.enterChineseListening() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("当前会话结束后切到百炼。再次点“开始同传”，自动识别外语并译成中文。")
         }
         .tint(VoiceTheme.accent)
     }
@@ -180,12 +188,38 @@ struct ContentView: View {
             if !model.switchNotice.isEmpty { Text(model.switchNotice).accessibilityIdentifier("switchNotice") }
             if let delay = model.firstTranslationDelay { Text(String(format: "原文完成至首译 %.1f 秒", delay)) }
             if model.micMuted && model.active { Text("麦克风已静音，会话仍可能计费") }
-            if !model.producesSpeech && !model.localTest {
+            if model.readsChineseOnFinish && !model.localTest {
+                Text("持续收音，结束后朗读中文")
+            } else if !model.producesSpeech && !model.localTest {
                 Text("仅字幕：本次不生成译音").accessibilityIdentifier("outputModeHint")
+            }
+            if model.canReadChineseCaptions {
+                Button { model.readChineseCaptions() } label: {
+                    Label("朗读中文译文", systemImage: "speaker.wave.2")
+                }.buttonStyle(.bordered)
             }
             if model.capturePausedForSpeaker { Text("外放播报中 · 暂停上传收音防止回声") }
             if model.active && !model.localTest { Text(model.route) }
         }.font(.caption).foregroundColor(.secondary).multilineTextAlignment(.center)
+    }
+    private var listeningControls: some View {
+        HStack {
+            if model.listenChinese {
+                Button("回到说中文") { model.exitChineseListening() }.disabled(model.active)
+                Spacer()
+                Toggle("听完再播", isOn: $model.deferChineseSpeech)
+                    .fixedSize().disabled(model.active || model.subtitlesOnly)
+                    .accessibilityIdentifier("deferChineseSpeech")
+            } else {
+                Button {
+                    if model.active { confirmListening = true }
+                    else { model.enterChineseListening() }
+                } label: {
+                    Label("听外语 → 中文", systemImage: "ear")
+                }.disabled(!canPickLanguage).accessibilityIdentifier("listenChinese")
+                Spacer()
+            }
+        }.font(.subheadline).padding(.horizontal, 24)
     }
     private var statusTitle: String {
         if model.playing { return "正在播报 · 点击打断" }
@@ -251,14 +285,15 @@ struct ContentView: View {
         }.buttonStyle(.plain)
     }
     private var speakerControl: some View {
-        VStack(spacing: 6) {
+        let canSpeak = model.producesSpeech || model.readsChineseOnFinish
+        return VStack(spacing: 6) {
             Button { model.playbackEnabled.toggle() } label: {
-                Image(systemName: model.playbackEnabled && model.producesSpeech ? "speaker.wave.2" : "speaker.slash")
+                Image(systemName: model.playbackEnabled && canSpeak ? "speaker.wave.2" : "speaker.slash")
                     .font(.title3).frame(width: 54, height: 54)
                     .background(VoiceTheme.surface, in: RoundedRectangle(cornerRadius: 15))
-            }.disabled(!model.producesSpeech)
-                .accessibilityLabel(!model.producesSpeech ? "仅字幕模式" : (model.playbackEnabled ? "关闭译音" : "开启译音"))
-            Text(!model.producesSpeech ? "仅字幕" : model.playbackEnabled ? "译音开启" : "已静音")
+            }.disabled(!canSpeak)
+                .accessibilityLabel(!canSpeak ? "仅字幕模式" : (model.playbackEnabled ? "关闭译音" : "开启译音"))
+            Text(!canSpeak ? "仅字幕" : !model.playbackEnabled ? "已静音" : model.readsChineseOnFinish ? "结束后播" : "译音开启")
                 .font(.caption2).foregroundColor(.secondary)
         }.buttonStyle(.plain)
     }
@@ -360,6 +395,7 @@ struct ContentView: View {
                     LabeledContentCompat("收到麦克风字节", String(model.inputBytes))
                     LabeledContentCompat("麦克风采集包数", String(model.capturedPackets))
                     LabeledContentCompat("音频已发送包数", String(model.sentPackets))
+                    LabeledContentCompat("外放静音包数", String(model.speakerSuppressedPackets))
                     LabeledContentCompat("收到译音字节", String(model.receivedAudioBytes))
                     LabeledContentCompat("播放设备", model.route)
                 }
