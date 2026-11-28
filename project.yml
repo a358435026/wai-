@@ -1,6 +1,7 @@
 name: Tongchuan
 options:
   bundleIdPrefix: app.tongchuan
+  developmentLanguage: zh-Hans
   deploymentTarget:
     iOS: '15.0'
 settings:
@@ -8,7 +9,7 @@ settings:
     SWIFT_VERSION: '5.0'
     TARGETED_DEVICE_FAMILY: '1,2'
     MARKETING_VERSION: '0.6.1'
-    CURRENT_PROJECT_VERSION: '22'
+    CURRENT_PROJECT_VERSION: '24'
 targets:
   Tongchuan:
     type: application
@@ -16,6 +17,16 @@ targets:
     sources:
       - Sources/App
       - Sources/Core
+      - path: Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    info:
+      path: Config/Tongchuan-Info.plist
+      properties:
+        CFBundleLocalizations: [zh-Hans]
+        ITSAppUsesNonExemptEncryption: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations: {}
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.tongchuan.personal
@@ -24,7 +35,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: 随声同传
         INFOPLIST_KEY_NSMicrophoneUsageDescription: 用于将你说的话实时翻译成字幕和语音。音频会传至你选择的火山引擎或阿里百炼服务。
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: NO
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
