@@ -2,6 +2,13 @@ import XCTest
 @testable import TongchuanCore
 
 final class RoutingAndTerminologyTests: XCTestCase {
+    func testMultilingualDialogueRoutesChineseToReplyAndForeignSpeechToMandarin() {
+        XCTAssertEqual(ConversationTurnRouting.destination(text: "这款车多少钱？", detected: "zh-Hans", reply: "es"), "es")
+        XCTAssertEqual(ConversationTurnRouting.destination(text: "交货期？", detected: nil, reply: "en"), "en")
+        for (text, detected) in [("How much is it?", "en"), ("¿Cuánto cuesta?", "es"), ("Сколько стоит?", "ru"), ("これはいくら？", "ja")] {
+            XCTAssertEqual(ConversationTurnRouting.destination(text: text, detected: detected, reply: "en"), "zh")
+        }
+    }
     func testHTTPAuthenticationIsNotReportedAsBalance() {
         let auth = ConnectionFailure(provider: .volcengine, status: 401).localizedDescription
         XCTAssertTrue(auth.contains("鉴权失败")); XCTAssertTrue(auth.contains("401"))

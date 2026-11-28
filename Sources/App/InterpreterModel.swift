@@ -32,12 +32,26 @@ final class InterpreterModel: ObservableObject {
     @Published private(set) var sourceCode = "zh"
     @Published private(set) var targetCode = "en"
     @Published private(set) var bidirectional = false
+    @Published private(set) var multilingualConversation = UserDefaults.standard.bool(forKey: "routing.multilingual") {
+        didSet { UserDefaults.standard.set(multilingualConversation, forKey: "routing.multilingual") }
+    }
+    @Published private(set) var conversationNotice = ""
+    private var turnTranslator: BailianTextTranslation?
+    private var turnTask: Task<Void, Never>?
+    private var pendingTurns: [(id: String, text: String)] = []
+    private var finalizedTurns: Set<String> = []
+    private let turnSpeaker = AVSpeechSynthesizer()
     @Published var subtitlesOnly = false {
         didSet { UserDefaults.standard.set(subtitlesOnly, forKey: "translation.subtitlesOnly") }
     }
     @Published var micMuted = false
     @Published var playbackEnabled = true {
-        didSet { if !playbackEnabled { audio?.clearPlayback() } }
+        didSet {
+            if !playbackEnabled {
+                audio?.clearPlayback()
+                turnSpeaker.stopSpeaking(at: .immediate)
+            }
+        }
     }
     @Published private(set) var provider: TranslationProvider = .volcengine
     @Published private(set) var listenChinese = UserDefaults.standard.bool(forKey: "listening.chinese") {
@@ -109,18 +123,23 @@ final class InterpreterModel: ObservableObject {
     var active: Bool { phase != .idle }
     var sourceLanguage: ASTLanguage { provider == .bailian ? BailianLanguages.automatic : ASTLanguages.source(sourceCode)! }
     var targetLanguage: ASTLanguage { provider == .bailian ? BailianLanguages.target(targetCode)! : ASTLanguages.target(targetCode)! }
-    var availableTargets: [ASTLanguage] { provider == .bailian ? BailianLanguages.targets : ASTLanguages.targets(for: sourceCode) }
+    var availableTargets: [ASTLanguage] {
+        if multilingualConversation { return BailianLanguages.targets.filter { $0.id != "zh" } }
+        return provider == .bailian ? BailianLanguages.targets : ASTLanguages.targets(for: sourceCode)
+    }
     var translationTitle: String {
-        bidirectional ? "中英互译（测试）" : "\(sourceLanguage.shortName) → \(targetLanguage.shortName)"
+        if bidirectional { return "中英自动互译" }
+        if multilingualConversation { return "多语自动对话 · 回复\(targetLanguage.shortName)" }
+        return "\(sourceLanguage.shortName) → \(targetLanguage.shortName)"
     }
     private var outputMode: ASTMode {
         if let sessionOutputMode { return sessionOutputMode }
-        if readsChineseOnFinish { return .subtitles }
+        if readsChineseOnFinish || multilingualConversation { return .subtitles }
         if provider == .bailian { return subtitlesOnly || !targetLanguage.defaultSpeech ? .subtitles : .speechToSpeech }
         if bidirectional { return subtitlesOnly ? .subtitles : .speechToSpeech }
         return ASTLanguages.mode(target: targetCode, subtitlesOnly: subtitlesOnly)
     }
-    var producesSpeech: Bool { outputMode == .speechToSpeech }
+    var producesSpeech: Bool { multilingualConversation ? !subtitlesOnly : outputMode == .speechToSpeech }
     var readsChineseOnFinish: Bool { listenChinese && deferChineseSpeech && !subtitlesOnly }
     var canReadChineseCaptions: Bool {
         !active && captionTarget == "zh" && translation.captions.contains { !$0.text.isEmpty }
@@ -128,17 +147,17 @@ final class InterpreterModel: ObservableObject {
     var canSwap: Bool { provider == .volcengine && !bidirectional && ASTLanguages.target(sourceCode) != nil }
     var configuration: ASTConfiguration {
         ASTConfiguration(source: provider == .bailian ? "bailian-auto" : bidirectional ? "zhen" : sourceCode,
-                         target: bidirectional ? "zhen" : targetCode,
+                         target: bidirectional ? "zhen" : multilingualConversation ? "zh" : targetCode,
                          mode: outputMode,
                          glossary: (try? glossary()) ?? [:])
     }
     private func glossary() throws -> [String: String] {
         try TradeTerminology.combined(source: provider == .bailian ? "bailian-auto" : sourceCode,
-            target: targetCode, enabled: terminologyEnabled, customSource: termsSource,
+            target: multilingualConversation ? "zh" : targetCode, enabled: terminologyEnabled, customSource: termsSource,
             customTarget: termsTarget, custom: customTerms)
     }
     private var eligibleBackup: (provider: TranslationProvider, configuration: ASTConfiguration)? {
-        guard automaticFallback, !localTest, !listenChinese,
+        guard automaticFallback, !localTest, !listenChinese, !multilingualConversation,
               let next = FailoverPolicy.destination(current: provider, tried: attempted,
                   configured: Set(TranslationProvider.allCases.filter { KeychainStore.read(provider: $0) != nil })),
               let recipe = FailoverPolicy.configuration(for: next, current: configuration, automaticSource: backupSource) else { return nil }
@@ -146,6 +165,7 @@ final class InterpreterModel: ObservableObject {
         return (next, recipe)
     }
     var fallbackDescription: String {
+        if multilingualConversation || bidirectional { return "自动对话使用当前服务。连接失败时保留自动方向，可重试或改用另一种模式。" }
         if listenChinese { return "听外语模式需要百炼自动识别源语言。不会切到固定源语种。" }
         let current = configuration
         let next: TranslationProvider = provider == .bailian ? .volcengine : .bailian
@@ -170,6 +190,7 @@ final class InterpreterModel: ObservableObject {
     func selectTarget(_ code: String) {
         guard !active, availableTargets.contains(where: { $0.id == code }) else { return }
         if code != "zh" { listenChinese = false }
+        if code == "zh" { multilingualConversation = false }
         bidirectional = false; targetCode = code; persistLanguages()
     }
     func enterChineseListening() {
@@ -183,6 +204,7 @@ final class InterpreterModel: ObservableObject {
             UserDefaults.standard.set(provider.rawValue, forKey: "listening.replyProvider")
             UserDefaults.standard.set(targetCode, forKey: "listening.replyTarget")
         }
+        multilingualConversation = false
         selectProvider(.bailian, preserveCaptions: true)
         selectTarget("zh")
         listenChinese = true
@@ -220,16 +242,37 @@ final class InterpreterModel: ObservableObject {
         selectPair(source: targetCode, target: sourceCode)
     }
     func selectBidirectional() {
-        guard provider == .volcengine, !active else { return }
+        guard !active else { return }
+        listenChinese = false
+        multilingualConversation = false
+        selectProvider(.volcengine, preserveCaptions: true)
         selectPair(source: "zh", target: "en"); bidirectional = true
+        persistLanguages()
+    }
+    func selectMultilingualConversation() {
+        guard !active else { return }
+        let reply = targetCode != "zh" && BailianLanguages.target(targetCode) != nil ? targetCode : "en"
+        listenChinese = false
+        selectProvider(.bailian, preserveCaptions: true)
+        selectTarget(reply)
+        multilingualConversation = true
+    }
+    func selectFixedDirection() {
+        guard !active else { return }
+        bidirectional = false
+        multilingualConversation = false
+        listenChinese = false
+        persistLanguages()
     }
     private func persistLanguages() {
         UserDefaults.standard.set(sourceCode, forKey: "translation.\(provider.rawValue).source")
         UserDefaults.standard.set(targetCode, forKey: "translation.\(provider.rawValue).target")
+        if provider == .volcengine { UserDefaults.standard.set(bidirectional, forKey: "routing.fireBilingual") }
     }
     func selectProvider(_ value: TranslationProvider, preserveCaptions: Bool = false) {
         guard !active, value != provider else { return }
         listenChinese = false
+        multilingualConversation = false
         provider = value
         UserDefaults.standard.set(value.rawValue, forKey: "translation.provider")
         restoreLanguages(); keySaved = KeychainStore.read(provider: provider) != nil
@@ -247,18 +290,22 @@ final class InterpreterModel: ObservableObject {
             sourceCode = ASTLanguages.validationError(source: input, target: output) == nil ? input : "zh"
             targetCode = ASTLanguages.validationError(source: input, target: output) == nil ? output : "en"
         }
-        bidirectional = false
+        bidirectional = provider == .volcengine && sourceCode == "zh" && targetCode == "en"
+            && (defaults.object(forKey: "routing.fireBilingual") as? Bool ?? true)
     }
     init() {
         provider = TranslationProvider(rawValue: UserDefaults.standard.string(forKey: "translation.provider") ?? "") ?? .volcengine
         restoreLanguages()
         if provider != .bailian || targetCode != "zh" { listenChinese = false }
+        if provider != .bailian || targetCode == "zh" { multilingualConversation = false }
         keySaved = KeychainStore.read(provider: provider) != nil
         subtitlesOnly = UserDefaults.standard.bool(forKey: "translation.subtitlesOnly")
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-reset-languages") {
             provider = .volcengine; sourceCode = "zh"; targetCode = "en"; subtitlesOnly = false
             listenChinese = false
+            bidirectional = false
+            multilingualConversation = false
             keySaved = KeychainStore.read(provider: provider) != nil
         }
         if ProcessInfo.processInfo.arguments.contains("--ui-auth-error") {
@@ -340,7 +387,11 @@ final class InterpreterModel: ObservableObject {
             chineseReader.speak(utterance)
         }
     }
-    func interruptPlayback() { skipCurrentSpeech = true; audio?.clearPlayback() }
+    func interruptPlayback() {
+        skipCurrentSpeech = true
+        audio?.clearPlayback()
+        turnSpeaker.stopSpeaking(at: .immediate)
+    }
 
     // This test uses the exact recording path as a real session, without opening
     // a WebSocket or needing a key. It remains active until the user stops it.
@@ -385,6 +436,7 @@ final class InterpreterModel: ObservableObject {
         chineseReader.stopSpeaking(at: .immediate)
         if !resuming {
             attempted = []; switchNotice = ""; latestFailure = ""; pendingSwitchReason = ""
+            conversationNotice = ""
         }
         attempted.insert(provider)
         do { _ = try glossary() } catch { errorMessage = error.localizedDescription; return }
@@ -402,10 +454,14 @@ final class InterpreterModel: ObservableObject {
             if phase == .idle { showSettings = true }
             return
         }
+        if multilingualConversation {
+            do { turnTranslator = try BailianTextTranslation(host: bailianHost, key: key) }
+            catch { errorMessage = error.localizedDescription; return }
+        }
         if !resuming {
             clearCaptions()
             captionDirection = translationTitle
-            captionTarget = targetCode
+            captionTarget = multilingualConversation || bidirectional ? nil : targetCode
         }
         else { source.end(); translation.end(); errorMessage = nil }
         micMuted = false
@@ -479,10 +535,21 @@ final class InterpreterModel: ObservableObject {
             lastCapture = Date()
             UIApplication.shared.isIdleTimerDisabled = true
         case 660:
+            if multilingualConversation {
+                let id = response.captionID
+                if id != latestSourceItem {
+                    latestSourceItem = id
+                    translation.set(id: id, text: "", final: false)
+                }
+                source.set(id: id, text: response.text, final: response.final)
+                if response.final { enqueueConversationTurn(id: id, text: response.text) }
+                return
+            }
             if latestSourceItem != response.captionID { latestSourceItem = response.captionID; health.sourceBegan() }
             source.set(id: response.captionID, text: response.text, final: response.final)
             if response.final && !response.text.isEmpty { health.sourceCompleted(at: Date()) }
         case 661:
+            if multilingualConversation { return }
             translation.set(id: response.captionID, text: response.text, final: response.final)
             if !response.text.isEmpty { health.translated(at: Date()); firstTranslationDelay = health.lastLatency }
         case 650: source.begin(); health.sourceBegan()
@@ -498,12 +565,58 @@ final class InterpreterModel: ObservableObject {
         case 350: skipCurrentSpeech = false
         case 352:
             receivedAudioBytes += response.audio.count
-            guard producesSpeech && playbackEnabled && !skipCurrentSpeech else { return }
+            guard !multilingualConversation && producesSpeech && playbackEnabled && !skipCurrentSpeech else { return }
             do { try audio?.play(response.audio) } catch { fail(error.localizedDescription) }
         case 152, 151:
             finishReceiving()
         default: break // Includes usage, sentence boundaries, and future events.
         }
+    }
+
+    private func enqueueConversationTurn(id: String, text: String) {
+        let sentence = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sentence.isEmpty, let translator = turnTranslator,
+              finalizedTurns.insert(id).inserted else { return }
+        guard pendingTurns.count < 16 else {
+            conversationNotice = "文字翻译积压，这一句保留原文。请稍等再继续。"
+            return
+        }
+        pendingTurns.append((id, sentence))
+        guard turnTask == nil else { return }
+        let run = generation
+        turnTask = Task { [weak self] in
+            guard let self else { return }
+            while self.generation == run && !Task.isCancelled && !self.pendingTurns.isEmpty {
+                let turn = self.pendingTurns.removeFirst()
+                let target = BailianTextTranslation.destination(for: turn.text, reply: self.targetCode)
+                do {
+                    let terms = try TradeTerminology.combined(source: target == "zh" ? "bailian-auto" : "zh",
+                        target: target, enabled: self.terminologyEnabled, customSource: self.termsSource,
+                        customTarget: self.termsTarget, custom: self.customTerms)
+                    let result = try await translator.translate(turn.text, to: target, terms: terms)
+                    guard self.generation == run, !Task.isCancelled else { return }
+                    self.translation.set(id: turn.id, text: result, final: true)
+                    if self.playbackEnabled && !self.subtitlesOnly { self.speakConversationTurn(result, target: target) }
+                } catch {
+                    guard self.generation == run, !Task.isCancelled else { return }
+                    self.conversationNotice = error.localizedDescription
+                }
+            }
+            if self.generation == run { self.turnTask = nil }
+        }
+    }
+
+    private func speakConversationTurn(_ text: String, target: String) {
+        let voice = (target == "zh" ? AVSpeechSynthesisVoice(language: "zh-CN") : AVSpeechSynthesisVoice(language: target))
+            ?? AVSpeechSynthesisVoice.speechVoices().first { $0.language.lowercased().hasPrefix(target + "-") }
+        guard let voice else {
+            conversationNotice = "已显示译文。系统缺少该语种的朗读声音。"
+            return
+        }
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = voice
+        turnSpeaker.speak(utterance)
+        playing = true
     }
 
     private func prepareAudio() {
@@ -561,7 +674,13 @@ final class InterpreterModel: ObservableObject {
                         self.capturedPackets += 1
                         self.lastCapture = Date()
                         guard self.phase == .live || self.phase == .finishing, let client = self.client else { continue }
-                        self.capturePausedForSpeaker = audio.isSpeaker && Date() < self.speakerHoldUntil
+                        if self.multilingualConversation {
+                            let speaking = self.turnSpeaker.isSpeaking
+                            if self.playing && !speaking { self.speakerHoldUntil = Date().addingTimeInterval(0.25) }
+                            if self.playing != speaking { self.playing = speaking }
+                        }
+                        self.capturePausedForSpeaker = audio.isSpeaker &&
+                            (Date() < self.speakerHoldUntil || (self.multilingualConversation && self.turnSpeaker.isSpeaking))
                         if self.capturePausedForSpeaker && !self.micMuted { self.speakerSuppressedPackets += 1 }
                         let packet = (self.micMuted || self.capturePausedForSpeaker) ? Data(repeating: 0, count: data.count) : data
                         try await client.sendAudio(packet)
@@ -617,10 +736,11 @@ final class InterpreterModel: ObservableObject {
         drainTask = Task { [weak self] in
             for _ in 0..<220 {
                 guard let self, self.generation == run else { return }
-                if self.audio?.isPlaying != true { break }
+                if self.turnTask == nil && self.audio?.isPlaying != true && !self.turnSpeaker.isSpeaking { break }
                 do { try await Task.sleep(nanoseconds: 100_000_000) } catch { return }
             }
             guard let self, self.generation == run else { return }
+            if self.turnTask != nil { self.conversationNotice = "部分文字翻译未及时返回，已保留收到的字幕。" }
             self.source.end(); self.translation.end()
             let shouldRead = self.readsChineseOnFinish && self.playbackEnabled
             self.cleanup(); self.status = "本次同传已结束"
@@ -648,6 +768,10 @@ final class InterpreterModel: ObservableObject {
         sessionOutputMode = nil
         generation = UUID()
         deadlineTask?.cancel(); drainTask?.cancel(); connectionTask?.cancel(); captureWatchdog?.cancel()
+        turnTask?.cancel(); turnTask = nil
+        turnTranslator?.close(); turnTranslator = nil
+        pendingTurns.removeAll(); finalizedTurns.removeAll()
+        turnSpeaker.stopSpeaking(at: .immediate)
         audio?.shutdown(); audio = nil
         streamContinuation?.finish(); streamContinuation = nil
         sendTask?.cancel(); sendTask = nil
